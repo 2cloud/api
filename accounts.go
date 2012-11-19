@@ -18,6 +18,8 @@ type tokenRequest struct {
 	Expires time.Time `json:"expires,omitempty"`
 }
 
+type credentials [2]string
+
 func parseCallback(callback string) (*url.URL, error) {
 	if callback == "" {
 		return nil, errors.New("Callback must be specified.")
@@ -146,4 +148,42 @@ func removeAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func refreshAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
+}
+
+func generateTmpCredentials(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	strs, err := r.CreateTempCredentials(r.AuthUser)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		return
+	}
+	creds := credentials(strs)
+	Respond(w, r, http.StatusCreated, "Generated temporary credentials", []interface{}{creds})
+	return
+}
+
+func authTmpCredentials(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	cred1 := r.Request.URL.Query().Get("cred1")
+	cred2 := r.Request.URL.Query().Get("cred2")
+	if cred1 == "" || cred2 == "" {
+		Respond(w, r, http.StatusBadRequest, "Both temporary credentials must be supplied", []interface{}{})
+		return
+	}
+	id, err := r.CheckTempCredentials(cred1, cred2)
+	if err == twocloud.InvalidCredentialsError {
+		Respond(w, r, http.StatusUnauthorized, "Invalid credentials", []interface{}{})
+		return
+	} else if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	user, err := r.GetUser(id)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	Respond(w, r, http.StatusOK, "Successfully authenticated the user", []interface{}{user})
+	return
 }

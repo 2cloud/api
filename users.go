@@ -41,18 +41,6 @@ func getUsers(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	emailstr := r.Request.URL.Query().Get("email_unconfirmed")
-	email_unconfirmed := emailstr == "1"
-	if email_unconfirmed {
-		users, err := r.GetUsersByUnconfirmedEmail(count)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
-			return
-		}
-		Respond(w, r, http.StatusOK, "Successfully retrieved a list of users", []interface{}{users})
-		return
-	}
 	if active_afterstr != "" && active_beforestr != "" {
 		active_after, err := time.Parse(time.RFC3339, active_afterstr)
 		if err != nil {
