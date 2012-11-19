@@ -21,6 +21,10 @@ type modifyUserRequest struct {
 	Fields []string `json:"fields"`
 }
 
+type verifyEmailRequest struct {
+	Code string `json:"code"`
+}
+
 func getUsers(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	if !r.AuthUser.IsAdmin {
 		Respond(w, r, http.StatusForbidden, "You don't have access to the user list.", []interface{}{})
@@ -323,5 +327,57 @@ func getUserAccounts(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		return
 	}
 	Respond(w, r, http.StatusOK, "Successfully retrieved a list of accounts", []interface{}{accounts})
+	return
+}
+
+func verifyEmail(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	var req verifyEmailRequest
+	user := r.AuthUser
+	username := r.Request.URL.Query().Get(":username")
+	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
+		if !r.AuthUser.IsAdmin {
+			Respond(w, r, http.StatusForbidden, "You don't have access to that user's account.", []interface{}{})
+			return
+		}
+		id, err := r.GetUserID(username)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+			return
+		}
+		user, err = r.GetUser(id)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+			return
+		}
+	}
+	body, err := ioutil.ReadAll(r.Request.Body)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		return
+	}
+	err = json.Unmarshal(body, &req)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		return
+	}
+	if req.Code == "" {
+		Respond(w, r, http.StatusBadRequest, "Code must be set.", []interface{}{})
+		return
+	}
+	err = r.VerifyEmail(user, req.Code)
+	if err == twocloud.InvalidConfirmationCodeError {
+		Respond(w, r, http.StatusBadRequest, "Invalid confirmation code.", []interface{}{})
+		return
+	} else if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		return
+	}
+	user.EmailUnconfirmed = false
+	Respond(w, r, http.StatusOK, "Successfully verified email address", []interface{}{user})
 	return
 }
