@@ -17,8 +17,8 @@ type accountAndUserRequest struct {
 }
 
 type modifyUserRequest struct {
-	User twocloud.User `json:"user"`
-	Fields []string `json:"fields"`
+	User   twocloud.User `json:"user"`
+	Fields []string      `json:"fields"`
 }
 
 type verifyEmailRequest struct {
@@ -34,6 +34,7 @@ func getUsers(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	active_beforestr := r.Request.URL.Query().Get("active_before")
 	joined_afterstr := r.Request.URL.Query().Get("joined_after")
 	joined_beforestr := r.Request.URL.Query().Get("joined_before")
+	var joined_before, joined_after, active_before, active_after time.Time
 	countstr := r.Request.URL.Query().Get("count")
 	count := -1
 	var err error
@@ -45,19 +46,23 @@ func getUsers(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	if active_afterstr != "" && active_beforestr != "" {
-		active_after, err := time.Parse(time.RFC3339, active_afterstr)
+	if active_afterstr != "" {
+		active_after, err = time.Parse(time.RFC3339, active_afterstr)
 		if err != nil {
 			r.Log.Error(err.Error())
 			Respond(w, r, http.StatusBadRequest, "Invalid active_after value.", []interface{}{})
 			return
 		}
-		active_before, err := time.Parse(time.RFC3339, active_beforestr)
+	}
+	if active_beforestr != "" {
+		active_before, err = time.Parse(time.RFC3339, active_beforestr)
 		if err != nil {
 			r.Log.Error(err.Error())
 			Respond(w, r, http.StatusBadRequest, "Invalid active_before value.", []interface{}{})
 			return
 		}
+	}
+	if active_beforestr != "" || active_afterstr != "" {
 		users, err := r.GetUsersByActivity(count, active_after, active_before)
 		if err != nil {
 			r.Log.Error(err.Error())
@@ -67,17 +72,21 @@ func getUsers(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusOK, "Successfully retrieved a list of users", []interface{}{users})
 		return
 	}
-	joined_after, err := time.Parse(time.RFC3339, joined_afterstr)
-	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Invalid joined_after value.", []interface{}{})
-		return
+	if joined_afterstr != "" {
+		joined_after, err = time.Parse(time.RFC3339, joined_afterstr)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusBadRequest, "Invalid joined_after value.", []interface{}{})
+			return
+		}
 	}
-	joined_before, err := time.Parse(time.RFC3339, joined_beforestr)
-	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Invalid joined_before value.", []interface{}{})
-		return
+	if joined_beforestr != "" {
+		joined_before, err = time.Parse(time.RFC3339, joined_beforestr)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusBadRequest, "Invalid joined_before value.", []interface{}{})
+			return
+		}
 	}
 	users, err := r.GetUsersByJoinDate(count, joined_after, joined_before)
 	if err != nil {
