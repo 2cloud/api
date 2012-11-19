@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"get.2cloud.org/twocloud"
 	"io/ioutil"
 	"net/http"
@@ -18,7 +17,7 @@ type tokenRequest struct {
 	Expires time.Time `json:"expires,omitempty"`
 }
 
-type credentials [2]string
+type Credentials [2]string
 
 func parseCallback(callback string) (*url.URL, error) {
 	if callback == "" {
@@ -49,7 +48,6 @@ func oauthRedirect(w http.ResponseWriter, r *twocloud.RequestBundle) {
 
 func oauthCallback(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	code := r.Request.URL.Query().Get("code")
-	fmt.Println(code)
 	if code == "" {
 		Respond(w, r, http.StatusBadRequest, "No auth code specified.", []interface{}{})
 		return
@@ -121,7 +119,6 @@ func oauthToken(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			Respond(w, r, http.StatusUnauthorized, oauthError.Error(), []interface{}{})
 			return
 		}
-		fmt.Println(err.Error())
 		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
@@ -157,7 +154,7 @@ func generateTmpCredentials(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
-	creds := credentials(strs)
+	creds := Credentials(strs)
 	Respond(w, r, http.StatusCreated, "Generated temporary credentials", []interface{}{creds})
 	return
 }
