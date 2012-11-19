@@ -36,7 +36,7 @@ func getUsers(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	joined_beforestr := r.Request.URL.Query().Get("joined_before")
 	var joined_before, joined_after, active_before, active_after time.Time
 	countstr := r.Request.URL.Query().Get("count")
-	count := -1
+	count := 20
 	var err error
 	if countstr != "" {
 		count, err = strconv.Atoi(countstr)
@@ -45,6 +45,9 @@ func getUsers(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			Respond(w, r, http.StatusBadRequest, "Invalid count param.", []interface{}{})
 			return
 		}
+	}
+	if count > 100 {
+		count = 100
 	}
 	if active_afterstr != "" {
 		active_after, err = time.Parse(time.RFC3339, active_afterstr)
