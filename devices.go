@@ -38,7 +38,8 @@ func getDevices(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	return
 }
 
-func newDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {	username := r.Request.URL.Query().Get(":username")
+func getDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	username := r.Request.URL.Query().Get(":username")
 	user := r.AuthUser
 	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
 		if !r.AuthUser.IsAdmin {
@@ -78,7 +79,7 @@ func newDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {	username := r
 	return
 }
 
-func getDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
+func newDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func updateDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
