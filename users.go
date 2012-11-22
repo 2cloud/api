@@ -342,6 +342,37 @@ func getUserAccounts(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	return
 }
 
+func resetSecret(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	user := r.AuthUser
+	username := r.Request.URL.Query().Get(":username")
+	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
+		if !r.AuthUser.IsAdmin {
+			Respond(w, r, http.StatusForbidden, "You don't have access to that user's account.", []interface{}{})
+			return
+		}
+		id, err := r.GetUserID(username)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+			return
+		}
+		user, err = r.GetUser(id)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+			return
+		}
+	}
+	resp, err := r.ResetSecret(user)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		return
+	}
+	Respond(w, r, http.StatusOK, "Successfully reset secret", []interface{}{resp})
+	return
+}
+
 func verifyEmail(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	var req verifyEmailRequest
 	user := r.AuthUser
