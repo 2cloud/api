@@ -12,8 +12,8 @@ import (
 )
 
 type tokenRequest struct {
-	Access string `json:"access"`
-	Refresh string `json:"refresh,omitempty"`
+	Access  string    `json:"access"`
+	Refresh string    `json:"refresh,omitempty"`
 	Expires time.Time `json:"expires,omitempty"`
 }
 
@@ -139,6 +139,51 @@ func oauthToken(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func updateAccountTokens(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	var tokens tokenRequest
+	accountID := r.Request.URL.Query().Get(":account")
+	if accountID == "" {
+		Respond(w, r, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
+		return
+	}
+	id, err := ruid.RUIDFromString(accountID)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
+		return
+	}
+	account, err := r.GetAccountByID(id)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	if account.UserID != r.AuthUser.ID {
+		Respond(w, r, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
+		return
+	}
+	body, err := ioutil.ReadAll(r.Request.Body)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		return
+	}
+	err = json.Unmarshal(body, &tokens)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		return
+	}
+	if tokens.Access == "" {
+		Respond(w, r, http.StatusBadRequest, "access token must be supplied.", []interface{}{})
+		return
+	}
+	err = r.UpdateAccountTokens(account, tokens.Access, tokens.Refresh, tokens.Expires)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	Respond(w, r, http.StatusOK, "Successfully updated the account tokens", []interface{}{account})
+	return
 }
 
 func removeAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
