@@ -257,3 +257,6 @@ func authTmpCredentials(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	Respond(w, r, http.StatusOK, "Successfully authenticated the user", []interface{}{user})
 	return
 }
+
+func auditAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
+}

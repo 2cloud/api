@@ -202,3 +202,6 @@ func updateDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
 
 func deleteDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
+
+func auditDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
+}

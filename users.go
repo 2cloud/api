@@ -424,3 +424,6 @@ func verifyEmail(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	Respond(w, r, http.StatusOK, "Successfully verified email address", []interface{}{user})
 	return
 }
+
+func auditUser(w http.ResponseWriter, r *twocloud.RequestBundle) {
+}
