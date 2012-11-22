@@ -145,6 +145,34 @@ func removeAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func refreshAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	accountID := r.Request.URL.Query().Get(":account")
+	if accountID == "" {
+		Respond(w, r, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
+		return
+	}
+	id, err := ruid.RUIDFromString(accountID)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
+		return
+	}
+	account, err := r.GetAccountByID(id)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	if account.UserID != r.AuthUser.ID {
+		Respond(w, r, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
+		return
+	}
+	account, err = r.UpdateAccountData(account)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	Respond(w, r, http.StatusOK, "Successfully updated the account", []interface{}{account})
+	return
 }
 
 func generateTmpCredentials(w http.ResponseWriter, r *twocloud.RequestBundle) {
