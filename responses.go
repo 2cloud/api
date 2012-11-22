@@ -17,7 +17,7 @@ type Response struct {
 	Notifications []twocloud.Notification `json:"notifications,omitempty"`
 	Subscriptions []twocloud.Subscription `json:"subscriptions,omitempty"`
 	Users         []twocloud.User         `json:"users,omitempty"`
-	Credentials   *Credentials             `json:"credentials,omitempty"`
+	Credentials   *Credentials            `json:"credentials,omitempty"`
 }
 
 func Respond(w http.ResponseWriter, r *twocloud.RequestBundle, code int, msg string, elems []interface{}) {
