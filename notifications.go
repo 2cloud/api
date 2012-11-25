@@ -232,6 +232,35 @@ func sendNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func markNotificationRead(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	username := r.Request.URL.Query().Get(":username")
+	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) && !r.AuthUser.IsAdmin {
+		Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+		return
+	}
+	var req twocloud.Notification
+	body, err := ioutil.ReadAll(r.Request.Body)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		return
+	}
+	err = json.Unmarshal(body, &req)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		return
+	}
+	if req.Unread {
+		Respond(w, r, http.StatusBadRequest, "Unread cannot be true.", []interface{}{})
+		return
+	}
+	notification, err := r.MarkNotificationRead(req)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	Respond(w, r, http.StatusOK, "Successfully updated the notification", []interface{}{notification})
+	return
 }
 
 func deleteNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
