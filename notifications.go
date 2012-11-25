@@ -1,12 +1,19 @@
 package main
 
 import (
+	"encoding/json"
 	"get.2cloud.org/twocloud"
+	"io/ioutil"
 	"net/http"
 	"secondbit.org/ruid"
 	"strconv"
 	"strings"
 )
+
+type notificationReq struct {
+	Notifications []twocloud.Notification   `json:"notifications,omitempty"`
+	Filter        *twocloud.BroadcastFilter `json:"broadcast_filter,omitempty"`
+}
 
 func getNotifications(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	username := r.Request.URL.Query().Get(":username")
@@ -148,9 +155,80 @@ func getNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func sendNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
-}
-
-func broadcastNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	if !r.AuthUser.IsAdmin {
+		Respond(w, r, http.StatusForbidden, "You don't have permission to send notifications.", []interface{}{})
+		return
+	}
+	var req notificationReq
+	body, err := ioutil.ReadAll(r.Request.Body)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		return
+	}
+	err = json.Unmarshal(body, &req)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		return
+	}
+	username := r.Request.URL.Query().Get(":username")
+	if username != "" {
+		deviceIDstr := r.Request.URL.Query().Get(":device")
+		if deviceIDstr != "" {
+			deviceID, err := ruid.RUIDFromString(deviceIDstr)
+			if err != nil {
+				r.Log.Error(err.Error())
+				Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
+				return
+			}
+			device, err := r.GetDevice(deviceID)
+			if err != nil {
+				r.Log.Error(err.Error())
+				Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+				return
+			}
+			notifications, err := r.SendNotificationsToDevice(device, req.Notifications)
+			if err != nil {
+				r.Log.Error(err.Error())
+				Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+				return
+			}
+			Respond(w, r, http.StatusCreated, "Successfully created notifications", []interface{}{notifications})
+			return
+		}
+		id, err := r.GetUserID(username)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+		user, err := r.GetUser(id)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+		notifications, err := r.SendNotificationsToUser(user, req.Notifications)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+		Respond(w, r, http.StatusCreated, "Successfully created notifications", []interface{}{notifications})
+		return
+	}
+	notifications, err := r.BroadcastNotifications(req.Notifications, req.Filter)
+	if err == twocloud.InvalidBroadcastFilter {
+		Respond(w, r, http.StatusBadRequest, err.Error(), []interface{}{})
+		return
+	} else if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	Respond(w, r, http.StatusCreated, "Successfully created notifications", []interface{}{notifications})
+	return
 }
 
 func markNotificationRead(w http.ResponseWriter, r *twocloud.RequestBundle) {
