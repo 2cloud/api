@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"secondbit.org/ruid"
 	"strconv"
+	"strings"
 )
 
 func getGraceSubscriptions(w http.ResponseWriter, r *twocloud.RequestBundle) {
@@ -52,6 +53,28 @@ func getGraceSubscriptions(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func getUserSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	username := r.Request.URL.Query().Get(":username")
+	user := r.AuthUser
+	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
+		if !r.AuthUser.IsAdmin {
+			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's subscription.", []interface{}{})
+			return
+		}
+		id, err := r.GetUserID(username)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+		user, err = r.GetUser(id)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+	}
+	Respond(w, r, http.StatusOK, "Successfully retrieved subscription information", []interface{}{user.Subscription})
+	return
 }
 
 func getSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
