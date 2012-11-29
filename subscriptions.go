@@ -78,6 +78,26 @@ func getUserSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func getSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	requestedSubscription := r.Request.URL.Query().Get(":subscription")
+	subscriptionID, err := ruid.RUIDFromString(requestedSubscription)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, "Invalid subscription ID", []interface{}{})
+		return
+	}
+	subscription := *r.AuthUser.Subscription
+	if r.AuthUser.Subscription.ID != subscriptionID {
+		if !r.AuthUser.IsAdmin {
+			Respond(w, r, http.StatusUnauthorized, "You don't have access to that subscription.", []interface{}{})
+			return
+		}
+		subscription, err = r.GetSubscription(subscriptionID)
+		if err != nil {
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+	}
+	Respond(w, r, http.StatusOK, "Successfully retrieved subscription information", []interface{}{subscription})
+	return
 }
 
 func startSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
