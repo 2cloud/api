@@ -230,9 +230,49 @@ func sendNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 
 func markNotificationRead(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	username := r.Request.URL.Query().Get(":username")
-	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) && !r.AuthUser.IsAdmin {
-		Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{})
+	user := r.AuthUser
+	var err error
+	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
+		if !r.AuthUser.IsAdmin {
+			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{})
+			return
+		}
+		id, err := r.GetUserID(username)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+		user, err = r.GetUser(id)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+	}
+	notificationID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":notification"))
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, "Invalid notification ID", []interface{}{})
 		return
+	}
+	notification, err := r.GetNotification(notificationID)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	if notification.DestinationType == "user" && notification.Destination != user.ID {
+		Respond(w, r, http.StatusBadRequest, "That notification doesn't belong to that user.", []interface{}{})
+		return
+	} else if notification.DestinationType == "device" {
+		device, err := r.GetDevice(notification.Destination)
+		if err != nil {
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+		if device.UserID != user.ID {
+			Respond(w, r, http.StatusBadRequest, "That notification does not belong to that user.", []interface{}{})
+			return
+		}
 	}
 	var req twocloud.Notification
 	body, err := ioutil.ReadAll(r.Request.Body)
@@ -251,7 +291,8 @@ func markNotificationRead(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusBadRequest, "Unread cannot be true.", []interface{}{})
 		return
 	}
-	notification, err := r.MarkNotificationRead(req)
+	notification.Unread = req.Unread
+	notification, err = r.MarkNotificationRead(notification)
 	if err != nil {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
