@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"get.2cloud.org/twocloud"
+	"io/ioutil"
 	"net/http"
 	"secondbit.org/ruid"
 	"strconv"
@@ -104,6 +106,56 @@ func startSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func updateSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	if !r.AuthUser.IsAdmin {
+		Respond(w, r, http.StatusForbidden, "You don't have permission to send notifications.", []interface{}{})
+		return
+	}
+	requestedSubscription := r.Request.URL.Query().Get(":subscription")
+	subscriptionID, err := ruid.RUIDFromString(requestedSubscription)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, "Invalid subscription ID", []interface{}{})
+		return
+	}
+	user := r.AuthUser
+	if r.AuthUser.Subscription.ID != subscriptionID {
+		subscription, err := r.GetSubscription(subscriptionID)
+		if err != nil {
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+		user, err = r.GetUser(subscription.UserID)
+		if err != nil {
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+	}
+	var req twocloud.Subscription
+	body, err := ioutil.ReadAll(r.Request.Body)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		return
+	}
+	err = json.Unmarshal(body, &req)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		return
+	}
+	err = r.UpdateSubscription(user, req.Expires)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		return
+	}
+	subscription, err := r.GetSubscription(subscriptionID)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	Respond(w, r, http.StatusOK, "Successfully updated the subscription", []interface{}{subscription})
+	return
 }
 
 func cancelSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
