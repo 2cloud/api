@@ -45,12 +45,12 @@ func getGraceSubscriptions(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			count = newcount
 		}
 	}
-	subscriptions, err := r.GetGraceSubscriptions(after, before, count)
+	users, err := r.GetGraceSubscriptions(after, before, count)
 	if err != nil {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	Respond(w, r, http.StatusOK, "Susccessfully retrieved a list of subscriptions", []interface{}{subscriptions})
+	Respond(w, r, http.StatusOK, "Susccessfully retrieved a list of users", []interface{}{users})
 	return
 }
 
@@ -79,29 +79,6 @@ func getUserSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	return
 }
 
-func getSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	requestedSubscription := r.Request.URL.Query().Get(":subscription")
-	subscriptionID, err := ruid.RUIDFromString(requestedSubscription)
-	if err != nil {
-		Respond(w, r, http.StatusBadRequest, "Invalid subscription ID", []interface{}{})
-		return
-	}
-	subscription := *r.AuthUser.Subscription
-	if r.AuthUser.Subscription.ID != subscriptionID {
-		if !r.AuthUser.IsAdmin {
-			Respond(w, r, http.StatusUnauthorized, "You don't have access to that subscription.", []interface{}{})
-			return
-		}
-		subscription, err = r.GetSubscription(subscriptionID)
-		if err != nil {
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
-	}
-	Respond(w, r, http.StatusOK, "Successfully retrieved subscription information", []interface{}{subscription})
-	return
-}
-
 func startSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
@@ -110,21 +87,18 @@ func updateSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusForbidden, "You don't have permission to send notifications.", []interface{}{})
 		return
 	}
-	requestedSubscription := r.Request.URL.Query().Get(":subscription")
-	subscriptionID, err := ruid.RUIDFromString(requestedSubscription)
-	if err != nil {
-		Respond(w, r, http.StatusBadRequest, "Invalid subscription ID", []interface{}{})
-		return
-	}
+	username := r.Request.URL.Query().Get(":username")
 	user := r.AuthUser
-	if r.AuthUser.Subscription.ID != subscriptionID {
-		subscription, err := r.GetSubscription(subscriptionID)
+	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
+		id, err := r.GetUserID(username)
 		if err != nil {
+			r.Log.Error(err.Error())
 			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 			return
 		}
-		user, err = r.GetUser(subscription.UserID)
+		user, err = r.GetUser(id)
 		if err != nil {
+			r.Log.Error(err.Error())
 			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 			return
 		}
@@ -148,13 +122,13 @@ func updateSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
-	subscription, err := r.GetSubscription(subscriptionID)
+	user, err = r.GetUser(user.ID)
 	if err != nil {
 		r.Log.Error(err.Error())
 		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	Respond(w, r, http.StatusOK, "Successfully updated the subscription", []interface{}{subscription})
+	Respond(w, r, http.StatusOK, "Successfully updated the subscription", []interface{}{user.Subscription})
 	return
 }
 
