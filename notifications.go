@@ -51,7 +51,7 @@ func getNotifications(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	var notifications []twocloud.Notification
 	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
 		if !r.AuthUser.IsAdmin {
-			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{})
 			return
 		}
 		id, err := r.GetUserID(username)
@@ -108,7 +108,7 @@ func getNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	user := r.AuthUser
 	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
 		if !r.AuthUser.IsAdmin {
-			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{})
 			return
 		}
 		id, err := r.GetUserID(username)
@@ -124,22 +124,6 @@ func getNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	deviceID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":device"))
-	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
-		return
-	}
-	device, err := r.GetDevice(deviceID)
-	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-		return
-	}
-	if device.UserID != user.ID {
-		Respond(w, r, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
-		return
-	}
 	notificationID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":notification"))
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid notification ID", []interface{}{})
@@ -150,10 +134,23 @@ func getNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
+	if notification.DestinationType == "user" && notification.Destination != user.ID {
+		Respond(w, r, http.StatusBadRequest, "That notification doesn't belong to that user.", []interface{}{})
+		return
+	} else if notification.DestinationType == "device" {
+		device, err := r.GetDevice(notification.Destination)
+		if err != nil {
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+		if device.UserID != user.ID {
+			Respond(w, r, http.StatusBadRequest, "That notification does not belong to that user.", []interface{}{})
+			return
+		}
+	}
 	Respond(w, r, http.StatusOK, "Successfully retrieved notification information", []interface{}{notification})
 	return
 }
-
 func sendNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	if !r.AuthUser.IsAdmin {
 		Respond(w, r, http.StatusForbidden, "You don't have permission to send notifications.", []interface{}{})
@@ -234,7 +231,7 @@ func sendNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 func markNotificationRead(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	username := r.Request.URL.Query().Get(":username")
 	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) && !r.AuthUser.IsAdmin {
-		Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+		Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{})
 		return
 	}
 	var req twocloud.Notification
@@ -264,6 +261,57 @@ func markNotificationRead(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func deleteNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	username := r.Request.URL.Query().Get(":username")
+	user := r.AuthUser
+	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
+		if !r.AuthUser.IsAdmin {
+			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{})
+			return
+		}
+		id, err := r.GetUserID(username)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+		user, err = r.GetUser(id)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+	}
+	notificationID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":notification"))
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, "Invalid notification ID", []interface{}{})
+		return
+	}
+	notification, err := r.GetNotification(notificationID)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	if notification.DestinationType == "user" && notification.Destination != user.ID {
+		Respond(w, r, http.StatusBadRequest, "That notification doesn't belong to that user.", []interface{}{})
+		return
+	} else if notification.DestinationType == "device" {
+		device, err := r.GetDevice(notification.Destination)
+		if err != nil {
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			return
+		}
+		if device.UserID != user.ID {
+			Respond(w, r, http.StatusBadRequest, "That notification does not belong to that user.", []interface{}{})
+			return
+		}
+	}
+	err = r.DeleteNotification(notification)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	Respond(w, r, http.StatusOK, "Successfully deleted the notification", []interface{}{notification})
+	return
 }
 
 func auditNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
