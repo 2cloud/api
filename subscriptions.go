@@ -113,16 +113,12 @@ func startSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
 		return
 	}
-	if len(req.AuthTokens) < 1 {
-		Respond(w, r, http.StatusBadRequest, "Auth tokens must be specified.", []interface{}{})
+	err = r.CreateSubscription(user, req.AuthTokens)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	tokenparts := strings.SplitN(req.AuthTokens[0], ":", 2)
-	if tokenparts[0] != "stripe" {
-		Respond(w, r, http.StatusBadRequest, "Unknown subscription provider, \""+tokenparts[0]+"\".", []interface{}{})
-		return
-	}
-	// TODO: Create Stripe customer and start subscription
 	Respond(w, r, http.StatusOK, "Successfully created the subscription", []interface{}{user.Subscription})
 	return
 }
@@ -162,12 +158,12 @@ func updateSubscription(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		return
 	}
 	if len(req.AuthTokens) > 0 {
-		tokenparts := strings.SplitN(req.AuthTokens[0], ":", 2)
-		if tokenparts[0] != "stripe" {
-			Respond(w, r, http.StatusBadRequest, "Unknown subscription provider, \""+tokenparts[0]+"\".", []interface{}{})
+		err = r.UpdateSubscriptionPaymentSource(user, req.AuthTokens)
+		if err != nil {
+			r.Log.Error(err.Error())
+			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 			return
 		}
-		// TODO: Update Stripe customer associated with the subscription
 	}
 	if r.AuthUser.IsAdmin {
 		err = r.UpdateSubscription(user, req.Expires)
