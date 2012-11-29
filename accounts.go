@@ -156,7 +156,7 @@ func updateAccountTokens(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	if account.UserID != r.AuthUser.ID {
+	if account.UserID != r.AuthUser.ID && !r.AuthUser.IsAdmin {
 		Respond(w, r, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
 		return
 	}
@@ -187,6 +187,34 @@ func updateAccountTokens(w http.ResponseWriter, r *twocloud.RequestBundle) {
 }
 
 func removeAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
+	accountID := r.Request.URL.Query().Get(":account")
+	if accountID == "" {
+		Respond(w, r, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
+		return
+	}
+	id, err := ruid.RUIDFromString(accountID)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
+		return
+	}
+	account, err := r.GetAccountByID(id)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	if account.UserID != r.AuthUser.ID && !r.AuthUser.IsAdmin {
+		Respond(w, r, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
+		return
+	}
+	err = r.DeleteAccount(account)
+	if err != nil {
+		r.Log.Error(err.Error())
+		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
+	}
+	Respond(w, r, http.StatusOK, "Successfully deleted the account", []interface{}{account})
+	return
 }
 
 func refreshAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
@@ -206,7 +234,7 @@ func refreshAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	if account.UserID != r.AuthUser.ID {
+	if account.UserID != r.AuthUser.ID && !r.AuthUser.IsAdmin {
 		Respond(w, r, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
 		return
 	}
