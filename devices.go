@@ -124,7 +124,11 @@ func newDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusBadRequest, "Invalid client type.", []interface{}{})
 		return
 	}
-	device, err := r.AddDevice(req.Name, req.ClientType, r.Request.RemoteAddr, req.Pushers.GCM.Key, user)
+	gcm_key := ""
+	if req.Pushers != nil && req.Pushers.GCM != nil {
+		gcm_key = req.Pushers.GCM.Key
+	}
+	device, err := r.AddDevice(req.Name, req.ClientType, r.Request.RemoteAddr, gcm_key, user)
 	if err != nil {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
