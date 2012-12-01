@@ -191,11 +191,11 @@ func updateDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		return
 	}
 	req.ClientType = strings.ToLower(req.ClientType)
-	if !req.ValidClientType() {
-		Respond(w, r, http.StatusBadRequest, "Invalid client type.", []interface{}{})
-		return
+	gcm_key := ""
+	if req.Pushers != nil && req.Pushers.GCM != nil {
+		gcm_key = req.Pushers.GCM.Key
 	}
-	device, err = r.UpdateDevice(device, req.Name, req.ClientType, req.Pushers.GCM.Key)
+	device, err = r.UpdateDevice(device, req.Name, req.ClientType, gcm_key)
 	if err != nil {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
