@@ -167,6 +167,7 @@ func sendLinks(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		}
 		link.Sender = r.Device
 		link.Receiver = device
+		link.Unread = true
 		links = append(links, link)
 	}
 	links, err = r.AddLinks(links)
