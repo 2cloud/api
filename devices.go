@@ -5,7 +5,7 @@ import (
 	"get.2cloud.org/twocloud"
 	"io/ioutil"
 	"net/http"
-	"secondbit.org/ruid"
+	"strconv"
 	"strings"
 )
 
@@ -61,7 +61,7 @@ func getDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	id, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":device"))
+	id, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
 	if err != nil {
 		r.Log.Error(err.Error())
 		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
@@ -159,7 +159,7 @@ func updateDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	devID, err := ruid.RUIDFromString(deviceId)
+	devID, err := strconv.ParseUint(deviceId, 10, 64)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
 		return
@@ -225,7 +225,7 @@ func deleteDevice(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	id, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":device"))
+	id, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
 	if err != nil {
 		r.Log.Error(err.Error())
 		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})

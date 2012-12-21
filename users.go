@@ -5,7 +5,6 @@ import (
 	"get.2cloud.org/twocloud"
 	"io/ioutil"
 	"net/http"
-	"secondbit.org/ruid"
 	"strconv"
 	"strings"
 	"time"
@@ -115,7 +114,7 @@ func createUser(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
 		return
 	}
-	if req.Account.ID == ruid.RUID(0) {
+	if req.Account.ID == 0 {
 		Respond(w, r, http.StatusBadRequest, "Account ID must be specified.", []interface{}{})
 		return
 	}
@@ -125,11 +124,11 @@ func createUser(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	if account.ID == ruid.RUID(0) {
+	if account.ID == 0 {
 		Respond(w, r, http.StatusBadRequest, "Invalid Account ID", []interface{}{})
 		return
 	}
-	if account.UserID != ruid.RUID(0) {
+	if account.UserID != 0 {
 		Respond(w, r, http.StatusConflict, "Account already registered.", []interface{}{})
 		return
 	}

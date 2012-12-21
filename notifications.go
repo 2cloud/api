@@ -5,7 +5,6 @@ import (
 	"get.2cloud.org/twocloud"
 	"io/ioutil"
 	"net/http"
-	"secondbit.org/ruid"
 	"strconv"
 	"strings"
 )
@@ -18,11 +17,11 @@ type notificationReq struct {
 func getNotifications(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	username := r.Request.URL.Query().Get(":username")
 	user := r.AuthUser
-	var after, before ruid.RUID
+	var after, before uint64
 	var err error
 	afterstr := r.Request.URL.Query().Get("after")
 	if afterstr != "" {
-		after, err = ruid.RUIDFromString(afterstr)
+		after, err = strconv.ParseUint(afterstr, 10, 64)
 		if err != nil {
 			Respond(w, r, http.StatusBadRequest, "Invalid after ID.", []interface{}{})
 			return
@@ -30,7 +29,7 @@ func getNotifications(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	}
 	beforestr := r.Request.URL.Query().Get("before")
 	if beforestr != "" {
-		before, err = ruid.RUIDFromString(beforestr)
+		before, err = strconv.ParseUint(beforestr, 10, 64)
 		if err != nil {
 			Respond(w, r, http.StatusBadRequest, "Invalid before ID.", []interface{}{})
 			return
@@ -69,7 +68,7 @@ func getNotifications(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	}
 	deviceID := r.Request.URL.Query().Get(":device")
 	if deviceID != "" {
-		id, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":device"))
+		id, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
 		if err != nil {
 			r.Log.Error(err.Error())
 			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
@@ -124,7 +123,7 @@ func getNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	notificationID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":notification"))
+	notificationID, err := strconv.ParseUint(r.Request.URL.Query().Get(":notification"), 10, 64)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid notification ID", []interface{}{})
 		return
@@ -173,7 +172,7 @@ func sendNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	if username != "" {
 		deviceIDstr := r.Request.URL.Query().Get(":device")
 		if deviceIDstr != "" {
-			deviceID, err := ruid.RUIDFromString(deviceIDstr)
+			deviceID, err := strconv.ParseUint(deviceIDstr, 10, 64)
 			if err != nil {
 				r.Log.Error(err.Error())
 				Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
@@ -250,7 +249,7 @@ func markNotificationRead(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	notificationID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":notification"))
+	notificationID, err := strconv.ParseUint(r.Request.URL.Query().Get(":notification"), 10, 64)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid notification ID", []interface{}{})
 		return
@@ -322,7 +321,7 @@ func deleteNotification(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	notificationID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":notification"))
+	notificationID, err := strconv.ParseUint(r.Request.URL.Query().Get(":notification"), 10, 64)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid notification ID", []interface{}{})
 		return

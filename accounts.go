@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"secondbit.org/ruid"
+	"strconv"
 	"time"
 )
 
@@ -71,7 +71,7 @@ func oauthCallback(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		return
 	}
 	values := callback.Query()
-	if account.UserID != ruid.RUID(0) {
+	if account.UserID != 0 {
 		user, err := r.GetUser(account.UserID)
 		if err != nil {
 			r.Log.Error(err.Error())
@@ -81,7 +81,7 @@ func oauthCallback(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		values.Set("user", user.Username)
 		values.Set("secret", user.Secret)
 	} else {
-		values.Set("id", account.ID.String())
+		values.Set("id", strconv.FormatUint(account.ID, 10))
 		values.Set("email", account.Email)
 		values.Set("givenName", account.GivenName)
 		values.Set("familyName", account.FamilyName)
@@ -122,7 +122,7 @@ func oauthToken(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
-	if account.UserID != ruid.RUID(0) {
+	if account.UserID != 0 {
 		user, err := r.GetUser(account.UserID)
 		if err != nil {
 			r.Log.Error(err.Error())
@@ -145,7 +145,7 @@ func updateAccountTokens(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
 		return
 	}
-	id, err := ruid.RUIDFromString(accountID)
+	id, err := strconv.ParseUint(accountID, 10, 64)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
 		return
@@ -192,7 +192,7 @@ func removeAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
 		return
 	}
-	id, err := ruid.RUIDFromString(accountID)
+	id, err := strconv.ParseUint(accountID, 10, 64)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
 		return
@@ -223,7 +223,7 @@ func refreshAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
 		return
 	}
-	id, err := ruid.RUIDFromString(accountID)
+	id, err := strconv.ParseUint(accountID, 10, 64)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
 		return

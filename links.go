@@ -5,7 +5,6 @@ import (
 	"get.2cloud.org/twocloud"
 	"io/ioutil"
 	"net/http"
-	"secondbit.org/ruid"
 	"strconv"
 	"strings"
 )
@@ -24,11 +23,11 @@ func getLinks(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	} else if role == "receiver" {
 		roleFlag = twocloud.RoleReceiver
 	}
-	var after, before ruid.RUID
+	var after, before uint64
 	var err error
 	afterstr := r.Request.URL.Query().Get("after")
 	if afterstr != "" {
-		after, err = ruid.RUIDFromString(afterstr)
+		after, err = strconv.ParseUint(afterstr, 10, 64)
 		if err != nil {
 			Respond(w, r, http.StatusBadRequest, "Invalid after ID.", []interface{}{})
 			return
@@ -36,7 +35,7 @@ func getLinks(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	}
 	beforestr := r.Request.URL.Query().Get("before")
 	if beforestr != "" {
-		before, err = ruid.RUIDFromString(beforestr)
+		before, err = strconv.ParseUint(beforestr, 10, 64)
 		if err != nil {
 			Respond(w, r, http.StatusBadRequest, "Invalid before ID.", []interface{}{})
 			return
@@ -75,7 +74,7 @@ func getLinks(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	}
 	deviceID := r.Request.URL.Query().Get(":device")
 	if deviceID != "" {
-		id, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":device"))
+		id, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
 		if err != nil {
 			r.Log.Error(err.Error())
 			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
@@ -130,7 +129,7 @@ func sendLinks(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	deviceID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":device"))
+	deviceID, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
 	if err != nil {
 		r.Log.Error(err.Error())
 		Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
@@ -200,7 +199,7 @@ func getLink(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	deviceID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":device"))
+	deviceID, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
 	if err != nil {
 		r.Log.Error(err.Error())
 		Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
@@ -216,7 +215,7 @@ func getLink(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 		return
 	}
-	linkID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":link"))
+	linkID, err := strconv.ParseUint(r.Request.URL.Query().Get(":link"), 10, 64)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid link ID", []interface{}{})
 		return
@@ -251,7 +250,7 @@ func updateLink(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	deviceID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":device"))
+	deviceID, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
 	if err != nil {
 		r.Log.Error(err.Error())
 		Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
@@ -267,7 +266,7 @@ func updateLink(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 		return
 	}
-	linkID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":link"))
+	linkID, err := strconv.ParseUint(r.Request.URL.Query().Get(":link"), 10, 64)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid link ID", []interface{}{})
 		return
@@ -331,7 +330,7 @@ func deleteLink(w http.ResponseWriter, r *twocloud.RequestBundle) {
 			return
 		}
 	}
-	deviceID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":device"))
+	deviceID, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
 	if err != nil {
 		r.Log.Error(err.Error())
 		Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
@@ -347,7 +346,7 @@ func deleteLink(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 		return
 	}
-	linkID, err := ruid.RUIDFromString(r.Request.URL.Query().Get(":link"))
+	linkID, err := strconv.ParseUint(r.Request.URL.Query().Get(":link"), 10, 64)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, "Invalid link ID", []interface{}{})
 		return

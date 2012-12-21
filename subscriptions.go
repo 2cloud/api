@@ -5,7 +5,6 @@ import (
 	"get.2cloud.org/twocloud"
 	"io/ioutil"
 	"net/http"
-	"secondbit.org/ruid"
 	"strconv"
 	"strings"
 )
@@ -15,11 +14,11 @@ func getGraceSubscriptions(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		Respond(w, r, http.StatusForbidden, "You don't have permission to list expired subscriptions.", []interface{}{})
 		return
 	}
-	var after, before ruid.RUID
+	var after, before uint64
 	var err error
 	afterstr := r.Request.URL.Query().Get("after")
 	if afterstr != "" {
-		after, err = ruid.RUIDFromString(afterstr)
+		after, err = strconv.ParseUint(afterstr, 10, 64)
 		if err != nil {
 			Respond(w, r, http.StatusBadRequest, "Invalid after ID.", []interface{}{})
 			return
@@ -27,7 +26,7 @@ func getGraceSubscriptions(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	}
 	beforestr := r.Request.URL.Query().Get("before")
 	if beforestr != "" {
-		before, err = ruid.RUIDFromString(beforestr)
+		before, err = strconv.ParseUint(beforestr, 10, 64)
 		if err != nil {
 			Respond(w, r, http.StatusBadRequest, "Invalid before ID.", []interface{}{})
 			return
