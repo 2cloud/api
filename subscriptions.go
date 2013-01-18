@@ -6,29 +6,29 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"strings"
+	"time"
 )
 
 func getGraceSubscriptions(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
-	if !r.AuthUser.IsAdmin {
+	if !b.AuthUser.IsAdmin {
 		Respond(w, http.StatusForbidden, "You don't have permission to list expired subscriptions.", []interface{}{})
 		return
 	}
-	var after, before uint64
+	var after, before time.Time
 	var err error
 	afterstr := r.URL.Query().Get("after")
 	if afterstr != "" {
-		after, err = strconv.ParseUint(afterstr, 10, 64)
+		after, err = time.Parse(time.RFC3339, afterstr)
 		if err != nil {
-			Respond(w, http.StatusBadRequest, "Invalid after ID.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "Invalid after timestamp. Needs to be URL-encoded RFC3339.", []interface{}{})
 			return
 		}
 	}
 	beforestr := r.URL.Query().Get("before")
 	if beforestr != "" {
-		before, err = strconv.ParseUint(beforestr, 10, 64)
+		before, err = time.Parse(time.RFC3339, beforestr)
 		if err != nil {
-			Respond(w, http.StatusBadRequest, "Invalid before ID.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "Invalid before timestamp. Needs to be URL-encoded RFC3339.", []interface{}{})
 			return
 		}
 	}
@@ -44,7 +44,7 @@ func getGraceSubscriptions(w http.ResponseWriter, r *http.Request, b *RequestBun
 			count = newcount
 		}
 	}
-	users, err := r.GetGraceSubscriptions(after, before, count)
+	users, err := b.Persister.GetSubscriptionsByExpiration(after, before, count)
 	if err != nil {
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
@@ -55,49 +55,37 @@ func getGraceSubscriptions(w http.ResponseWriter, r *http.Request, b *RequestBun
 
 func getUserSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	username := r.URL.Query().Get(":username")
-	user := r.AuthUser
-	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
-		if !r.AuthUser.IsAdmin {
+	user, err := b.getUser(username)
+	if err != nil {
+		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's subscription.", []interface{}{})
 			return
 		}
-		id, err := r.GetUserID(username)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		if err == twocloud.UserNotFoundError {
+			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
 			return
 		}
-		user, err = r.GetUser(id)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
 	}
 	Respond(w, http.StatusOK, "Successfully retrieved subscription information", []interface{}{user.Subscription})
 	return
 }
 
-func startSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+func createSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	username := r.URL.Query().Get(":username")
-	user := r.AuthUser
-	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
-		if !r.AuthUser.IsAdmin {
+	user, err := b.getUser(username)
+	if err != nil {
+		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's subscription.", []interface{}{})
 			return
 		}
-		id, err := r.GetUserID(username)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		if err == twocloud.UserNotFoundError {
+			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
 			return
 		}
-		user, err = r.GetUser(id)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
 	}
 	var req twocloud.Subscription
 	body, err := ioutil.ReadAll(r.Body)
@@ -112,36 +100,31 @@ func startSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle)
 		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
 		return
 	}
-	err = r.CreateSubscription(user, req.AuthTokens)
+	subscription, err := b.Persister.CreateSubscription(user.ID, req.FundingID, req.FundingSource, req.AutoRenew)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
+	user.Subscription = subscription
 	Respond(w, http.StatusOK, "Successfully created the subscription", []interface{}{user.Subscription})
 	return
 }
 
 func updateSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	username := r.URL.Query().Get(":username")
-	user := r.AuthUser
-	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
-		if !r.AuthUser.IsAdmin {
+	user, err := b.getUser(username)
+	if err != nil {
+		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's subscription.", []interface{}{})
 			return
 		}
-		id, err := r.GetUserID(username)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		if err == twocloud.UserNotFoundError {
+			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
 			return
 		}
-		user, err = r.GetUser(id)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
 	}
 	var req twocloud.Subscription
 	body, err := ioutil.ReadAll(r.Body)
@@ -156,25 +139,19 @@ func updateSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle
 		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
 		return
 	}
-	if len(req.AuthTokens) > 0 {
-		err = r.UpdateSubscriptionPaymentSource(user, req.AuthTokens)
+	if req.FundingID != 0 && req.FundingSource != "" {
+		err = b.Persister.UpdateSubscriptionPaymentSource(user.Subscription, req.FundingID, req.FundingSource)
 		if err != nil {
 			b.Persister.Log.Error(err.Error())
 			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 			return
 		}
 	}
-	if r.AuthUser.IsAdmin {
-		err = r.UpdateSubscription(user, req.Expires)
+	if b.AuthUser.IsAdmin {
+		err = b.Persister.UpdateSubscriptionExpiration(user.Subscription, req.Expires)
 		if err != nil {
 			b.Persister.Log.Error(err.Error())
 			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
-			return
-		}
-		user, err = r.GetUser(user.ID)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 			return
 		}
 	}
@@ -184,27 +161,21 @@ func updateSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle
 
 func cancelSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	username := r.URL.Query().Get(":username")
-	user := r.AuthUser
-	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
-		if !r.AuthUser.IsAdmin {
+	user, err := b.getUser(username)
+	if err != nil {
+		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's subscription.", []interface{}{})
 			return
 		}
-		id, err := r.GetUserID(username)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		if err == twocloud.UserNotFoundError {
+			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
 			return
 		}
-		user, err = r.GetUser(id)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
 	}
 	sub := *user.Subscription
-	err := r.CancelSubscription(user)
+	err = b.Persister.CancelRenewingSubscription(user.Subscription)
 	if err != nil {
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
