@@ -161,6 +161,7 @@ func (rb *Request) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := twocloud.NewPersister(config)
+	defer p.Close()
 	if err != nil {
 		os.Stdout.WriteString("Error creating Persister: " + err.Error() + "\n")
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
