@@ -34,48 +34,48 @@ func parseCallback(callback string) (*url.URL, error) {
 	return cbURL, nil
 }
 
-func oauthRedirect(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	callback := r.Request.URL.Query().Get("callback")
+func oauthRedirect(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	callback := r.URL.Query().Get("callback")
 	_, err := parseCallback(callback)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err.Error(), []interface{}{})
+		Respond(w, http.StatusBadRequest, err.Error(), []interface{}{})
 		return
 	}
-	url := r.GetOAuthAuthURL(r.Config.OAuth.ClientID, r.Config.OAuth.ClientSecret, r.Config.OAuth.CallbackURL, callback)
-	http.Redirect(w, r.Request, url, http.StatusFound)
+	url := twocloud.GetGoogleAuthURL(b.Persister.Config.OAuth, callback)
+	http.Redirect(w, r, url, http.StatusFound)
 	return
 }
 
-func oauthCallback(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	code := r.Request.URL.Query().Get("code")
+func oauthCallback(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	code := r.URL.Query().Get("code")
 	if code == "" {
-		Respond(w, r, http.StatusBadRequest, "No auth code specified.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "No auth code specified.", []interface{}{})
 		return
 	}
-	state := r.Request.URL.Query().Get("state")
+	state := r.URL.Query().Get("state")
 	callback, err := parseCallback(state)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err.Error(), []interface{}{})
+		Respond(w, http.StatusBadRequest, err.Error(), []interface{}{})
 		return
 	}
-	access, refresh, exp, err := r.GetOAuthAccessToken(code)
+	access, refresh, exp, err := twocloud.GetGoogleAccessToken(b.Persister.Config.OAuth, code)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
-	account, err := r.GetAccount(access, refresh, exp)
+	account, err := b.Persister.GetAccountByTokens(access, refresh, exp)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
 	values := callback.Query()
 	if account.UserID != 0 {
-		user, err := r.GetUser(account.UserID)
+		user, err := b.Persister.GetUser(account.UserID)
 		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{})
+			b.Persister.Log.Error(err.Error())
+			Respond(w, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{})
 			return
 		}
 		values.Set("user", user.Username)
@@ -87,204 +87,204 @@ func oauthCallback(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		values.Set("familyName", account.FamilyName)
 	}
 	callback.RawQuery = values.Encode()
-	http.Redirect(w, r.Request, callback.String(), http.StatusFound)
+	http.Redirect(w, r, callback.String(), http.StatusFound)
 	return
 }
 
-func oauthToken(w http.ResponseWriter, r *twocloud.RequestBundle) {
+func oauthToken(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	var tokens tokenRequest
-	body, err := ioutil.ReadAll(r.Request.Body)
+	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
 	err = json.Unmarshal(body, &tokens)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
 		return
 	}
 	if tokens.Access == "" {
-		Respond(w, r, http.StatusBadRequest, "access token must be supplied.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "access token must be supplied.", []interface{}{})
 		return
 	}
-	account, err := r.GetAccount(tokens.Access, tokens.Refresh, tokens.Expires)
+	account, err := b.Persister.GetAccountByTokens(tokens.Access, tokens.Refresh, tokens.Expires)
 	if err != nil {
-		r.Log.Error(err.Error())
+		b.Persister.Log.Error(err.Error())
 		if err == twocloud.OAuthAuthError {
-			Respond(w, r, http.StatusUnauthorized, err.Error(), []interface{}{})
+			Respond(w, http.StatusUnauthorized, err.Error(), []interface{}{})
 			return
 		} else if oauthError, ok := err.(twocloud.OAuthError); ok {
-			Respond(w, r, http.StatusUnauthorized, oauthError.Error(), []interface{}{})
+			Respond(w, http.StatusUnauthorized, oauthError.Error(), []interface{}{})
 			return
 		}
-		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
 	if account.UserID != 0 {
-		user, err := r.GetUser(account.UserID)
+		user, err := b.Persister.GetUser(account.UserID)
 		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{})
+			b.Persister.Log.Error(err.Error())
+			Respond(w, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{})
 			return
 		}
 		setLastModified(w, user.LastActive)
-		Respond(w, r, http.StatusOK, "Successfully authenticated the user", []interface{}{user})
+		Respond(w, http.StatusOK, "Successfully authenticated the user", []interface{}{user})
 		return
 	}
-	Respond(w, r, http.StatusCreated, "Successfully created a new account", []interface{}{account})
+	Respond(w, http.StatusCreated, "Successfully created a new account", []interface{}{account})
 	setLastModified(w, account.Added)
 	return
 }
 
-func updateAccountTokens(w http.ResponseWriter, r *twocloud.RequestBundle) {
+func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	var tokens tokenRequest
-	accountID := r.Request.URL.Query().Get(":account")
+	accountID := r.URL.Query().Get(":account")
 	if accountID == "" {
-		Respond(w, r, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
 		return
 	}
 	id, err := strconv.ParseUint(accountID, 10, 64)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
 		return
 	}
-	account, err := r.GetAccountByID(id)
+	account, err := b.Persister.GetAccountByID(id)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	if account.UserID != r.AuthUser.ID && !r.AuthUser.IsAdmin {
-		Respond(w, r, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
+	if account.UserID != b.AuthUser.ID && !b.AuthUser.IsAdmin {
+		Respond(w, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
 		return
 	}
-	body, err := ioutil.ReadAll(r.Request.Body)
+	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
 	err = json.Unmarshal(body, &tokens)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
 		return
 	}
 	if tokens.Access == "" {
-		Respond(w, r, http.StatusBadRequest, "access token must be supplied.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "access token must be supplied.", []interface{}{})
 		return
 	}
-	err = r.UpdateAccountTokens(account, tokens.Access, tokens.Refresh, tokens.Expires)
+	err = b.Persister.UpdateAccountTokens(account, tokens.Access, tokens.Refresh, tokens.Expires)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	Respond(w, r, http.StatusOK, "Successfully updated the account tokens", []interface{}{account})
+	Respond(w, http.StatusOK, "Successfully updated the account tokens", []interface{}{account})
 	return
 }
 
-func removeAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	accountID := r.Request.URL.Query().Get(":account")
+func removeAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	accountID := r.URL.Query().Get(":account")
 	if accountID == "" {
-		Respond(w, r, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
 		return
 	}
 	id, err := strconv.ParseUint(accountID, 10, 64)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
 		return
 	}
-	account, err := r.GetAccountByID(id)
+	account, err := b.Persister.GetAccountByID(id)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	if account.UserID != r.AuthUser.ID && !r.AuthUser.IsAdmin {
-		Respond(w, r, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
+	if account.UserID != b.AuthUser.ID && !b.AuthUser.IsAdmin {
+		Respond(w, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
 		return
 	}
-	err = r.DeleteAccount(account)
+	err = b.Persister.DeleteAccount(account)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	Respond(w, r, http.StatusOK, "Successfully deleted the account", []interface{}{account})
+	Respond(w, http.StatusOK, "Successfully deleted the account", []interface{}{account})
 	return
 }
 
-func refreshAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	accountID := r.Request.URL.Query().Get(":account")
+func refreshAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	accountID := r.URL.Query().Get(":account")
 	if accountID == "" {
-		Respond(w, r, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
 		return
 	}
 	id, err := strconv.ParseUint(accountID, 10, 64)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
 		return
 	}
-	account, err := r.GetAccountByID(id)
+	account, err := b.Persister.GetAccountByID(id)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	if account.UserID != r.AuthUser.ID && !r.AuthUser.IsAdmin {
-		Respond(w, r, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
+	if account.UserID != b.AuthUser.ID && !b.AuthUser.IsAdmin {
+		Respond(w, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
 		return
 	}
-	account, err = r.UpdateAccountData(account)
+	account, err = b.Persister.UpdateAccountData(account)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	Respond(w, r, http.StatusOK, "Successfully updated the account", []interface{}{account})
+	Respond(w, http.StatusOK, "Successfully updated the account", []interface{}{account})
 	return
 }
 
-func generateTmpCredentials(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	strs, err := r.CreateTempCredentials(r.AuthUser)
+func generateTmpCredentials(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	strs, err := b.Persister.CreateTempCredentials(*b.AuthUser)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
 	creds := Credentials(strs)
-	Respond(w, r, http.StatusCreated, "Generated temporary credentials", []interface{}{creds})
+	Respond(w, http.StatusCreated, "Generated temporary credentials", []interface{}{creds})
 	return
 }
 
-func authTmpCredentials(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	cred1 := r.Request.URL.Query().Get("cred1")
-	cred2 := r.Request.URL.Query().Get("cred2")
+func authTmpCredentials(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	cred1 := r.URL.Query().Get("cred1")
+	cred2 := r.URL.Query().Get("cred2")
 	if cred1 == "" || cred2 == "" {
-		Respond(w, r, http.StatusBadRequest, "Both temporary credentials must be supplied", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Both temporary credentials must be supplied", []interface{}{})
 		return
 	}
-	id, err := r.CheckTempCredentials(cred1, cred2)
+	id, err := b.Persister.CheckTempCredentials(cred1, cred2)
 	if err == twocloud.InvalidCredentialsError {
-		Respond(w, r, http.StatusUnauthorized, "Invalid credentials", []interface{}{})
+		Respond(w, http.StatusUnauthorized, "Invalid credentials", []interface{}{})
 		return
 	} else if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	user, err := r.GetUser(id)
+	user, err := b.Persister.GetUser(id)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	Respond(w, r, http.StatusOK, "Successfully authenticated the user", []interface{}{user})
+	Respond(w, http.StatusOK, "Successfully authenticated the user", []interface{}{user})
 	return
 }
 
-func auditAccount(w http.ResponseWriter, r *twocloud.RequestBundle) {
+func auditAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"get.2cloud.org/twocloud"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 )
@@ -20,7 +21,7 @@ type Response struct {
 	Credentials   *Credentials            `json:"credentials,omitempty"`
 }
 
-func Respond(w http.ResponseWriter, r *twocloud.RequestBundle, code int, msg string, elems []interface{}) {
+func Respond(w http.ResponseWriter, code int, msg string, elems []interface{}) {
 	resp := Response{}
 	resp.Code = code
 	resp.Message = msg
@@ -160,6 +161,6 @@ func Respond(w http.ResponseWriter, r *twocloud.RequestBundle, code int, msg str
 	enc := json.NewEncoder(w)
 	err := enc.Encode(resp)
 	if err != nil {
-		r.Log.Error(err.Error())
+		os.Stdout.WriteString("%s\n", err.Error())
 	}
 }

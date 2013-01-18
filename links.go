@@ -6,17 +6,15 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 type LinksReq struct {
 	Links []twocloud.Link `json:"links"`
 }
 
-func getLinks(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	username := r.Request.URL.Query().Get(":username")
-	user := r.AuthUser
-	role := r.Request.URL.Query().Get("role")
+func getLinks(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	username := r.URL.Query().Get(":username")
+	role := r.URL.Query().Get("role")
 	roleFlag := twocloud.RoleEither
 	if role == "sender" {
 		roleFlag = twocloud.RoleSender
@@ -25,28 +23,28 @@ func getLinks(w http.ResponseWriter, r *twocloud.RequestBundle) {
 	}
 	var after, before uint64
 	var err error
-	afterstr := r.Request.URL.Query().Get("after")
+	afterstr := r.URL.Query().Get("after")
 	if afterstr != "" {
 		after, err = strconv.ParseUint(afterstr, 10, 64)
 		if err != nil {
-			Respond(w, r, http.StatusBadRequest, "Invalid after ID.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "Invalid after ID.", []interface{}{})
 			return
 		}
 	}
-	beforestr := r.Request.URL.Query().Get("before")
+	beforestr := r.URL.Query().Get("before")
 	if beforestr != "" {
 		before, err = strconv.ParseUint(beforestr, 10, 64)
 		if err != nil {
-			Respond(w, r, http.StatusBadRequest, "Invalid before ID.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "Invalid before ID.", []interface{}{})
 			return
 		}
 	}
 	count := 20
-	countstr := r.Request.URL.Query().Get("count")
+	countstr := r.URL.Query().Get("count")
 	if countstr != "" {
 		newcount, err := strconv.Atoi(countstr)
 		if err != nil {
-			Respond(w, r, http.StatusBadRequest, "Invalid count.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "Invalid count.", []interface{}{})
 			return
 		}
 		if newcount > 0 && newcount <= 100 {
@@ -54,316 +52,335 @@ func getLinks(w http.ResponseWriter, r *twocloud.RequestBundle) {
 		}
 	}
 	var links []twocloud.Link
-	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
-		if !r.AuthUser.IsAdmin {
-			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+	user, err := b.getUser(username)
+	if err != nil {
+		if err == UnauthorisedAccessAttempt {
+			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
 			return
 		}
-		id, err := r.GetUserID(username)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		if err == twocloud.UserNotFoundError {
+			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
 			return
 		}
-		user, err = r.GetUser(id)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		return
 	}
-	deviceID := r.Request.URL.Query().Get(":device")
+	deviceID := r.URL.Query().Get(":device")
 	if deviceID != "" {
-		id, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
+		id, err := strconv.ParseUint(r.URL.Query().Get(":device"), 10, 64)
 		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			b.Persister.Log.Error(err.Error())
+			Respond(w, http.StatusInternalServerError, "Invalid device ID.", []interface{}{})
 			return
 		}
-		device, err := r.GetDevice(id)
+		device, err := b.getDevice(id)
 		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			if err == UnauthorisedAccessAttempt {
+				Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+				return
+			}
+			if err == twocloud.DeviceNotFoundError {
+				Respond(w, http.StatusNotFound, "Device not found.", []interface{}{})
+				return
+			}
+			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 			return
 		}
 		if device.UserID != user.ID {
-			Respond(w, r, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 			return
 		}
-		links, err = r.GetLinksByDevice(device, roleFlag, before, after, count)
+		links, err = b.Persister.GetLinksByDevice(device, roleFlag, before, after, count)
 		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			b.Persister.Log.Error(err.Error())
+			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 			return
 		}
 	} else {
-		links, err = r.GetLinksByUser(user, roleFlag, before, after, count)
+		links, err = b.Persister.GetLinksByUser(user, roleFlag, before, after, count)
 		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			b.Persister.Log.Error(err.Error())
+			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 			return
 		}
 	}
-	Respond(w, r, http.StatusOK, "Successfully retrieved a list of links", []interface{}{links})
+	Respond(w, http.StatusOK, "Successfully retrieved a list of links", []interface{}{links})
 	return
 }
 
-func sendLinks(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	username := r.Request.URL.Query().Get(":username")
-	user := r.AuthUser
-	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
-		if !r.AuthUser.IsAdmin {
-			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
-			return
-		}
-		id, err := r.GetUserID(username)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
-		user, err = r.GetUser(id)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
-	}
-	deviceID, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
+func sendLinks(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	username := r.URL.Query().Get(":username")
+	user, err := b.getUser(username)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
+		if err == UnauthorisedAccessAttempt {
+			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+			return
+		}
+		if err == twocloud.UserNotFoundError {
+			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	device, err := r.GetDevice(deviceID)
+	id, err := strconv.ParseUint(r.URL.Query().Get(":device"), 10, 64)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
+		return
+	}
+	device, err := b.getDevice(id)
+	if err != nil {
+		if err == UnauthorisedAccessAttempt {
+			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+			return
+		}
+		if err == twocloud.DeviceNotFoundError {
+			Respond(w, http.StatusNotFound, "Device not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
 	if device.UserID != user.ID {
-		Respond(w, r, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 		return
 	}
 	var req LinksReq
-	body, err := ioutil.ReadAll(r.Request.Body)
+	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
 	err = json.Unmarshal(body, &req)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
 		return
 	}
 	links := []twocloud.Link{}
 	for _, link := range req.Links {
 		if link.URL == nil || link.URL.Address == "" {
-			Respond(w, r, http.StatusBadRequest, "The address field must be specified.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "The address field must be specified.", []interface{}{})
 			return
 		}
-		link.Sender = r.Device
-		link.Receiver = device
+		link.Sender = b.AuthDevice.ID
+		link.Receiver = device.ID
 		link.Unread = true
 		links = append(links, link)
 	}
-	links, err = r.AddLinks(links)
+	links, err = b.Persister.AddLinks(links)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 	}
-	Respond(w, r, http.StatusCreated, "Successfully created links", []interface{}{links})
+	Respond(w, http.StatusCreated, "Successfully created links", []interface{}{links})
 	return
 }
 
-func getLink(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	username := r.Request.URL.Query().Get(":username")
-	user := r.AuthUser
-	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
-		if !r.AuthUser.IsAdmin {
-			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
-			return
-		}
-		id, err := r.GetUserID(username)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
-		user, err = r.GetUser(id)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
-	}
-	deviceID, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
+func getLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	username := r.URL.Query().Get(":username")
+	user, err := b.getUser(username)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
+		if err == UnauthorisedAccessAttempt {
+			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+			return
+		}
+		if err == twocloud.UserNotFoundError {
+			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	device, err := r.GetDevice(deviceID)
+	id, err := strconv.ParseUint(r.URL.Query().Get(":device"), 10, 64)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
+		return
+	}
+	device, err := b.getDevice(id)
+	if err != nil {
+		if err == UnauthorisedAccessAttempt {
+			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+			return
+		}
+		if err == twocloud.DeviceNotFoundError {
+			Respond(w, http.StatusNotFound, "Device not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
 	if device.UserID != user.ID {
-		Respond(w, r, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 		return
 	}
-	linkID, err := strconv.ParseUint(r.Request.URL.Query().Get(":link"), 10, 64)
+	linkID, err := strconv.ParseUint(r.URL.Query().Get(":link"), 10, 64)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, "Invalid link ID", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Invalid link ID", []interface{}{})
 		return
 	}
-	link, err := r.GetLink(linkID)
+	link, err := b.Persister.GetLink(linkID)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		if err == twocloud.LinkNotFoundError {
+			Respond(w, http.StatusNotFound, "Link not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	Respond(w, r, http.StatusOK, "Successfully retrieved link information", []interface{}{link})
+	Respond(w, http.StatusOK, "Successfully retrieved link information", []interface{}{link})
 	return
 }
 
-func updateLink(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	username := r.Request.URL.Query().Get(":username")
-	user := r.AuthUser
-	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
-		if !r.AuthUser.IsAdmin {
-			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
-			return
-		}
-		id, err := r.GetUserID(username)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
-		user, err = r.GetUser(id)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
-	}
-	deviceID, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
+func updateLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	username := r.URL.Query().Get(":username")
+	user, err := b.getUser(username)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
+		if err == UnauthorisedAccessAttempt {
+			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+			return
+		}
+		if err == twocloud.UserNotFoundError {
+			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	device, err := r.GetDevice(deviceID)
+	id, err := strconv.ParseUint(r.URL.Query().Get(":device"), 10, 64)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
+		return
+	}
+	device, err := b.getDevice(id)
+	if err != nil {
+		if err == UnauthorisedAccessAttempt {
+			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+			return
+		}
+		if err == twocloud.DeviceNotFoundError {
+			Respond(w, http.StatusNotFound, "Device not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
 	if device.UserID != user.ID {
-		Respond(w, r, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 		return
 	}
-	linkID, err := strconv.ParseUint(r.Request.URL.Query().Get(":link"), 10, 64)
+	linkID, err := strconv.ParseUint(r.URL.Query().Get(":link"), 10, 64)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, "Invalid link ID", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Invalid link ID", []interface{}{})
 		return
 	}
-	link, err := r.GetLink(linkID)
+	link, err := b.Persister.GetLink(linkID)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		if err == twocloud.LinkNotFoundError {
+			Respond(w, http.StatusNotFound, "Link not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
 	var req twocloud.Link
-	body, err := ioutil.ReadAll(r.Request.Body)
+	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
 	err = json.Unmarshal(body, &req)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
 		return
 	}
 	if req.URL != nil {
-		Respond(w, r, http.StatusBadRequest, "URL cannot be modified.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "URL cannot be modified.", []interface{}{})
 		return
 	}
 	unread := link.Unread
 	comment := link.Comment
-	if device.ID == link.Sender.ID {
+	if device.ID == link.Sender {
 		comment = req.Comment
-	} else if device.ID == link.Receiver.ID {
+	} else if device.ID == link.Receiver {
 		unread = req.Unread
 	}
-	link, err = r.UpdateLink(link, unread, comment)
+	link, err = b.Persister.UpdateLink(link, unread, comment)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	Respond(w, r, http.StatusOK, "Successfully retrieved link information", []interface{}{link})
+	Respond(w, http.StatusOK, "Successfully retrieved link information", []interface{}{link})
 	return
 }
 
-func deleteLink(w http.ResponseWriter, r *twocloud.RequestBundle) {
-	username := r.Request.URL.Query().Get(":username")
-	user := r.AuthUser
-	if strings.ToLower(username) != strings.ToLower(r.AuthUser.Username) {
-		if !r.AuthUser.IsAdmin {
-			Respond(w, r, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
-			return
-		}
-		id, err := r.GetUserID(username)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
-		user, err = r.GetUser(id)
-		if err != nil {
-			r.Log.Error(err.Error())
-			Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
-	}
-	deviceID, err := strconv.ParseUint(r.Request.URL.Query().Get(":device"), 10, 64)
+func deleteLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	username := r.URL.Query().Get(":username")
+	user, err := b.getUser(username)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusBadRequest, "Invalid device ID", []interface{}{})
+		if err == UnauthorisedAccessAttempt {
+			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+			return
+		}
+		if err == twocloud.UserNotFoundError {
+			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	device, err := r.GetDevice(deviceID)
+	id, err := strconv.ParseUint(r.URL.Query().Get(":device"), 10, 64)
 	if err != nil {
-		r.Log.Error(err.Error())
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
+		return
+	}
+	device, err := b.getDevice(id)
+	if err != nil {
+		if err == UnauthorisedAccessAttempt {
+			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
+			return
+		}
+		if err == twocloud.DeviceNotFoundError {
+			Respond(w, http.StatusNotFound, "Device not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
 	if device.UserID != user.ID {
-		Respond(w, r, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 		return
 	}
-	linkID, err := strconv.ParseUint(r.Request.URL.Query().Get(":link"), 10, 64)
+	linkID, err := strconv.ParseUint(r.URL.Query().Get(":link"), 10, 64)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, "Invalid link ID", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Invalid link ID", []interface{}{})
 		return
 	}
-	link, err := r.GetLink(linkID)
+	link, err := b.Persister.GetLink(linkID)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		if err == twocloud.LinkNotFoundError {
+			Respond(w, http.StatusNotFound, "Link not found.", []interface{}{})
+			return
+		}
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	err = r.DeleteLink(link)
+	// TODO: check link ownership
+	err = b.Persister.DeleteLink(link)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	Respond(w, r, http.StatusOK, "Successfully deleted the link", []interface{}{link})
+	Respond(w, http.StatusOK, "Successfully deleted the link", []interface{}{link})
 	return
 }
 
-func auditLink(w http.ResponseWriter, r *twocloud.RequestBundle) {
+func auditLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 }
