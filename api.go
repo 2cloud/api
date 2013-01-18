@@ -270,7 +270,7 @@ func main() {
 	router.Get("/subscriptions/in_grace_period", newRequest(getGraceSubscriptions, true))
 	router.Get("/users/:username/subscription", newRequest(getUserSubscription, true))
 
-	router.Post("/users/:username/subscription", devicelessRequest(startSubscription, true))
+	router.Post("/users/:username/subscription", devicelessRequest(createSubscription, true))
 	router.Put("/users/:username/subscription", newRequest(updateSubscription, true))
 	router.Del("/users/:username/subscription", newRequest(cancelSubscription, true))
 
