@@ -157,6 +157,12 @@ func createUser(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
+	_, err = b.Persister.CreateSubscription(user.ID, twocloud.ID(0), "", false)
+	if err != nil {
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		return
+	}
 	setLastModified(w, user.LastActive)
 	Respond(w, http.StatusCreated, "Successfully created a user account", []interface{}{user})
 	return
