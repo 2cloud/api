@@ -161,6 +161,6 @@ func Respond(w http.ResponseWriter, code int, msg string, elems []interface{}) {
 	enc := json.NewEncoder(w)
 	err := enc.Encode(resp)
 	if err != nil {
-		os.Stdout.WriteString(err.Error()+"\n")
+		os.Stdout.WriteString(err.Error() + "\n")
 	}
 }
