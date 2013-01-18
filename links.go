@@ -73,7 +73,7 @@ func getLinks(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 			Respond(w, http.StatusInternalServerError, "Invalid device ID.", []interface{}{})
 			return
 		}
-		device, err := b.getDevice(id)
+		device, err := b.getDevice(twocloud.ID(id))
 		if err != nil {
 			if err == UnauthorisedAccessAttempt {
 				Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
@@ -90,14 +90,14 @@ func getLinks(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 			Respond(w, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 			return
 		}
-		links, err = b.Persister.GetLinksByDevice(device, roleFlag, before, after, count)
+		links, err = b.Persister.GetLinksByDevice(device, roleFlag, twocloud.ID(before), twocloud.ID(after), count)
 		if err != nil {
 			b.Persister.Log.Error(err.Error())
 			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 			return
 		}
 	} else {
-		links, err = b.Persister.GetLinksByUser(user, roleFlag, before, after, count)
+		links, err = b.Persister.GetLinksByUser(user, roleFlag, twocloud.ID(before), twocloud.ID(after), count)
 		if err != nil {
 			b.Persister.Log.Error(err.Error())
 			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
@@ -129,7 +129,7 @@ func sendLinks(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
 		return
 	}
-	device, err := b.getDevice(id)
+	device, err := b.getDevice(twocloud.ID(id))
 	if err != nil {
 		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
@@ -200,7 +200,7 @@ func getLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
 		return
 	}
-	device, err := b.getDevice(id)
+	device, err := b.getDevice(twocloud.ID(id))
 	if err != nil {
 		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
@@ -222,7 +222,7 @@ func getLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid link ID", []interface{}{})
 		return
 	}
-	link, err := b.Persister.GetLink(linkID)
+	link, err := b.Persister.GetLink(twocloud.ID(linkID))
 	if err != nil {
 		if err == twocloud.LinkNotFoundError {
 			Respond(w, http.StatusNotFound, "Link not found.", []interface{}{})
@@ -256,7 +256,7 @@ func updateLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
 		return
 	}
-	device, err := b.getDevice(id)
+	device, err := b.getDevice(twocloud.ID(id))
 	if err != nil {
 		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
@@ -278,7 +278,7 @@ func updateLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid link ID", []interface{}{})
 		return
 	}
-	link, err := b.Persister.GetLink(linkID)
+	link, err := b.Persister.GetLink(twocloud.ID(linkID))
 	if err != nil {
 		if err == twocloud.LinkNotFoundError {
 			Respond(w, http.StatusNotFound, "Link not found.", []interface{}{})
@@ -341,7 +341,7 @@ func deleteLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
 		return
 	}
-	device, err := b.getDevice(id)
+	device, err := b.getDevice(twocloud.ID(id))
 	if err != nil {
 		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's links.", []interface{}{})
@@ -363,7 +363,7 @@ func deleteLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid link ID", []interface{}{})
 		return
 	}
-	link, err := b.Persister.GetLink(linkID)
+	link, err := b.Persister.GetLink(twocloud.ID(linkID))
 	if err != nil {
 		if err == twocloud.LinkNotFoundError {
 			Respond(w, http.StatusNotFound, "Link not found.", []interface{}{})

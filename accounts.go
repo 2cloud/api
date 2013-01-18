@@ -81,7 +81,7 @@ func oauthCallback(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		values.Set("user", user.Username)
 		values.Set("secret", user.Secret)
 	} else {
-		values.Set("id", strconv.FormatUint(account.ID, 10))
+		values.Set("id", strconv.FormatUint(uint64(account.ID), 10))
 		values.Set("email", account.Email)
 		values.Set("givenName", account.GivenName)
 		values.Set("familyName", account.FamilyName)
@@ -150,7 +150,7 @@ func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundl
 		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
 		return
 	}
-	account, err := b.Persister.GetAccountByID(id)
+	account, err := b.Persister.GetAccountByID(twocloud.ID(id))
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
@@ -197,7 +197,7 @@ func removeAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
 		return
 	}
-	account, err := b.Persister.GetAccountByID(id)
+	account, err := b.Persister.GetAccountByID(twocloud.ID(id))
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
@@ -228,7 +228,7 @@ func refreshAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
 		return
 	}
-	account, err := b.Persister.GetAccountByID(id)
+	account, err := b.Persister.GetAccountByID(twocloud.ID(id))
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})

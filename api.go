@@ -72,7 +72,7 @@ func AuthenticateRequest(w http.ResponseWriter, r *http.Request, deviceRequired 
 			Respond(w, http.StatusBadRequest, "From header must be an integer.", []interface{}{})
 			return false
 		}
-		device, err := bundle.Persister.GetDevice(deviceId)
+		device, err := bundle.Persister.GetDevice(twocloud.ID(deviceId))
 		if err != nil {
 			if err == twocloud.DeviceNotFoundError {
 				Respond(w, http.StatusBadRequest, "From header not a valid device ID.", []interface{}{})
@@ -137,7 +137,7 @@ func (b *RequestBundle) getUser(username string) (twocloud.User, error) {
 	return user, err
 }
 
-func (b *RequestBundle) getDevice(id uint64) (twocloud.Device, error) {
+func (b *RequestBundle) getDevice(id twocloud.ID) (twocloud.Device, error) {
 	device := *b.AuthDevice
 	var err error
 	if device.ID != id {

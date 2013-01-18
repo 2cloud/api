@@ -67,7 +67,7 @@ func getNotifications(w http.ResponseWriter, r *http.Request, b *RequestBundle) 
 			Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
 			return
 		}
-		device, err := b.getDevice(id)
+		device, err := b.getDevice(twocloud.ID(id))
 		if err != nil {
 			if err == UnauthorisedAccessAttempt {
 				Respond(w, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{})
@@ -84,14 +84,14 @@ func getNotifications(w http.ResponseWriter, r *http.Request, b *RequestBundle) 
 			Respond(w, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 			return
 		}
-		notifications, err = b.Persister.GetNotificationsByDevice(device, before, after, count)
+		notifications, err = b.Persister.GetNotificationsByDevice(device, twocloud.ID(before), twocloud.ID(after), count)
 		if err != nil {
 			b.Persister.Log.Error(err.Error())
 			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 			return
 		}
 	} else {
-		notifications, err = b.Persister.GetNotificationsByUser(user, before, after, count)
+		notifications, err = b.Persister.GetNotificationsByUser(user, twocloud.ID(before), twocloud.ID(after), count)
 		if err != nil {
 			b.Persister.Log.Error(err.Error())
 			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
@@ -122,7 +122,7 @@ func getNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid notification ID", []interface{}{})
 		return
 	}
-	notification, err := b.Persister.GetNotification(notificationID)
+	notification, err := b.Persister.GetNotification(twocloud.ID(notificationID))
 	if err != nil {
 		if err == twocloud.NotificationNotFoundError {
 			Respond(w, http.StatusInternalServerError, err.Error(), []interface{}{})
@@ -184,7 +184,7 @@ func sendNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) 
 				Respond(w, http.StatusBadRequest, "Invalid device ID", []interface{}{})
 				return
 			}
-			device, err := b.getDevice(deviceID)
+			device, err := b.getDevice(twocloud.ID(deviceID))
 			if err != nil {
 				if err == UnauthorisedAccessAttempt {
 					Respond(w, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{})
@@ -262,7 +262,7 @@ func markNotificationRead(w http.ResponseWriter, r *http.Request, b *RequestBund
 		Respond(w, http.StatusBadRequest, "Invalid notification ID", []interface{}{})
 		return
 	}
-	notification, err := b.Persister.GetNotification(notificationID)
+	notification, err := b.Persister.GetNotification(twocloud.ID(notificationID))
 	if err != nil {
 		if err == twocloud.NotificationNotFoundError {
 			Respond(w, http.StatusNotFound, err.Error(), []interface{}{})
@@ -340,7 +340,7 @@ func deleteNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle
 		Respond(w, http.StatusBadRequest, "Invalid notification ID", []interface{}{})
 		return
 	}
-	notification, err := b.Persister.GetNotification(notificationID)
+	notification, err := b.Persister.GetNotification(twocloud.ID(notificationID))
 	if err != nil {
 		if err == twocloud.NotificationNotFoundError {
 			Respond(w, http.StatusNotFound, err.Error(), []interface{}{})

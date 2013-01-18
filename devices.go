@@ -55,7 +55,7 @@ func getDevice(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
 		return
 	}
-	device, err := b.getDevice(id)
+	device, err := b.getDevice(twocloud.ID(id))
 	if err != nil {
 		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's devices.", []interface{}{})
@@ -147,7 +147,7 @@ func updateDevice(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
 		return
 	}
-	device, err := b.getDevice(id)
+	device, err := b.getDevice(twocloud.ID(id))
 	if err != nil {
 		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's devices.", []interface{}{})
@@ -212,7 +212,7 @@ func deleteDevice(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
 		return
 	}
-	device, err := b.getDevice(id)
+	device, err := b.getDevice(twocloud.ID(id))
 	if err != nil {
 		if err == UnauthorisedAccessAttempt {
 			Respond(w, http.StatusUnauthorized, "You don't have access to that user's devices.", []interface{}{})
