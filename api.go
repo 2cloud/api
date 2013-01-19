@@ -235,7 +235,7 @@ func main() {
 	router.Get("/users/:username/audit", newRequest(auditUser, true))
 
 	// Devices
-	router.Get("/users/:username/devices", newRequest(getDevices, true))
+	router.Get("/users/:username/devices", devicelessRequest(getDevices, true))
 	router.Post("/users/:username/devices", devicelessRequest(newDevice, true))
 	router.Get("/users/:username/devices/:device", newRequest(getDevice, true))
 	router.Put("/users/:username/devices/:device", newRequest(updateDevice, true))
