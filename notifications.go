@@ -1,16 +1,21 @@
 package main
 
 import (
-	"encoding/json"
 	"get.2cloud.org/twocloud"
-	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
-type notificationReq struct {
-	Notifications []twocloud.Notification   `json:"notifications,omitempty"`
-	Filter        *twocloud.BroadcastFilter `json:"broadcast_filter,omitempty"`
+type notification struct {
+	Nature *string `json:"nature,omitempty"`
+	Body   *string `json:"body,omitempty"`
+	Unread *bool   `json:"unread,omitempty"`
+}
+
+type broadcastFilter struct {
+	Targets    string   `json:"targets,omitempty"`
+	ClientType []string `json:"client_type,omitempty"`
 }
 
 func getNotifications(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
@@ -156,23 +161,42 @@ func getNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	Respond(w, http.StatusOK, "Successfully retrieved notification information", []interface{}{notification})
 	return
 }
+
 func sendNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	if !b.AuthUser.IsAdmin {
 		Respond(w, http.StatusForbidden, "You don't have permission to send notifications.", []interface{}{})
 		return
 	}
-	var req notificationReq
-	body, err := ioutil.ReadAll(r.Body)
+	request, err := getRequest(r)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		if isUnmarshalError(err) {
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		} else {
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		}
 		return
 	}
-	err = json.Unmarshal(body, &req)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
-		return
+	notifications := []twocloud.Notification{}
+	for _, not := range request.Notifications {
+		if not.Nature == nil {
+			Respond(w, http.StatusBadRequest, "Nature must be specified for each notification.", []interface{}{})
+			return
+		}
+		if not.Body == nil {
+			Respond(w, http.StatusBadRequest, "Body must be specified for each notification.", []interface{}{})
+			return
+		}
+		unread := false
+		if not.Unread != nil {
+			unread = *not.Unread
+		}
+		notification := twocloud.Notification{
+			Nature: strings.TrimSpace(*not.Nature),
+			Unread: unread,
+			Body:   strings.TrimSpace(*not.Body),
+		}
+		notifications = append(notifications, notification)
 	}
 	username := r.URL.Query().Get(":username")
 	if username != "" {
@@ -197,7 +221,7 @@ func sendNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) 
 				Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 				return
 			}
-			notifications, err := b.Persister.SendNotificationsToDevice(device, req.Notifications)
+			notifications, err := b.Persister.SendNotificationsToDevice(device, notifications)
 			if err != nil {
 				b.Persister.Log.Error(err.Error())
 				Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
@@ -220,7 +244,7 @@ func sendNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) 
 			return
 		}
 
-		notifications, err := b.Persister.SendNotificationsToUser(user, req.Notifications)
+		notifications, err := b.Persister.SendNotificationsToUser(user, notifications)
 		if err != nil {
 			b.Persister.Log.Error(err.Error())
 			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
@@ -229,7 +253,12 @@ func sendNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) 
 		Respond(w, http.StatusCreated, "Successfully created notifications", []interface{}{notifications})
 		return
 	}
-	notifications, err := b.Persister.BroadcastNotifications(req.Notifications, req.Filter)
+	var bf *twocloud.BroadcastFilter
+	if request.BroadcastFilter != nil {
+		bf.Targets = request.BroadcastFilter.Targets
+		bf.ClientType = request.BroadcastFilter.ClientType
+	}
+	notifications, err = b.Persister.BroadcastNotifications(notifications, bf)
 	if err == twocloud.InvalidBroadcastFilter {
 		Respond(w, http.StatusBadRequest, err.Error(), []interface{}{})
 		return
@@ -293,24 +322,27 @@ func markNotificationRead(w http.ResponseWriter, r *http.Request, b *RequestBund
 			return
 		}
 	}
-	var req twocloud.Notification
-	body, err := ioutil.ReadAll(r.Body)
+	request, err := getRequest(r)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		if isUnmarshalError(err) {
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		} else {
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		}
 		return
 	}
-	err = json.Unmarshal(body, &req)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+	if request.Notification == nil {
+		Respond(w, http.StatusBadRequest, "Must include a notification in the request body.", []interface{}{})
 		return
-	}
-	if req.Unread {
+	} else if request.Notification.Unread == nil {
+		Respond(w, http.StatusBadRequest, "Unread cannot be nil.", []interface{}{})
+		return
+	} else if *request.Notification.Unread == true {
 		Respond(w, http.StatusBadRequest, "Unread cannot be true.", []interface{}{})
 		return
 	}
-	notification.Unread = req.Unread
+	notification.Unread = *request.Notification.Unread
 	notification, err = b.Persister.MarkNotificationRead(notification)
 	if err != nil {
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})

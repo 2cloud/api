@@ -1,19 +1,21 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"get.2cloud.org/twocloud"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
 	"time"
 )
 
-type tokenRequest struct {
-	Access  string    `json:"access"`
-	Refresh string    `json:"refresh,omitempty"`
+type account struct {
+	ID twocloud.ID `json:"id"`
+}
+
+type tokens struct {
+	Access  *string   `json:"access"`
+	Refresh *string   `json:"refresh,omitempty"`
 	Expires time.Time `json:"expires,omitempty"`
 }
 
@@ -92,24 +94,21 @@ func oauthCallback(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 }
 
 func oauthToken(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
-	var tokens tokenRequest
-	body, err := ioutil.ReadAll(r.Body)
+	request, err := getRequest(r)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		if isUnmarshalError(err) {
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		} else {
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		}
 		return
 	}
-	err = json.Unmarshal(body, &tokens)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+	if request.Tokens.Access == nil {
+		Respond(w, http.StatusBadRequest, "Access token must be supplied.", []interface{}{})
 		return
 	}
-	if tokens.Access == "" {
-		Respond(w, http.StatusBadRequest, "access token must be supplied.", []interface{}{})
-		return
-	}
-	account, err := b.Persister.GetAccountByTokens(tokens.Access, tokens.Refresh, tokens.Expires)
+	account, err := b.Persister.GetAccountByTokens(request.Tokens.Access, request.Tokens.Refresh, request.Tokens.Expires)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		if err == twocloud.OAuthAuthError {
@@ -139,7 +138,6 @@ func oauthToken(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 }
 
 func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
-	var tokens tokenRequest
 	accountID := r.URL.Query().Get(":account")
 	if accountID == "" {
 		Respond(w, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
@@ -148,6 +146,20 @@ func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundl
 	id, err := strconv.ParseUint(accountID, 10, 64)
 	if err != nil {
 		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
+		return
+	}
+	request, err := getRequest(r)
+	if err != nil {
+		b.Persister.Log.Error(err.Error())
+		if isUnmarshalError(err) {
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		} else {
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		}
+		return
+	}
+	if request.Tokens.Access == nil {
+		Respond(w, http.StatusBadRequest, "Access token must be supplied.", []interface{}{})
 		return
 	}
 	account, err := b.Persister.GetAccountByID(twocloud.ID(id))
@@ -160,23 +172,7 @@ func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundl
 		Respond(w, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
 		return
 	}
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
-		return
-	}
-	err = json.Unmarshal(body, &tokens)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
-		return
-	}
-	if tokens.Access == "" {
-		Respond(w, http.StatusBadRequest, "access token must be supplied.", []interface{}{})
-		return
-	}
-	err = b.Persister.UpdateAccountTokens(account, tokens.Access, tokens.Refresh, tokens.Expires)
+	err = b.Persister.UpdateAccountTokens(account, request.Tokens.Access, request.Tokens.Refresh, request.Tokens.Expires)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})

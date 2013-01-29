@@ -1,15 +1,19 @@
 package main
 
 import (
-	"encoding/json"
 	"get.2cloud.org/twocloud"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 )
 
-type LinksReq struct {
-	Links []twocloud.Link `json:"links"`
+type urlData struct {
+	Address *string `json:"address,omitempty"`
+}
+
+type link struct {
+	URL     *urlData `json:"url,omitempty"`
+	Unread  *bool    `json:"unread,omitempty"`
+	Comment *string  `json:"comment,omitempty"`
 }
 
 func getLinks(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
@@ -146,29 +150,37 @@ func sendLinks(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 		return
 	}
-	var req LinksReq
-	body, err := ioutil.ReadAll(r.Body)
+	request, err := getRequest(r)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
-		return
-	}
-	err = json.Unmarshal(body, &req)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		if isUnmarshalError(err) {
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		} else {
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		}
 		return
 	}
 	links := []twocloud.Link{}
-	for _, link := range req.Links {
-		if link.URL == nil || link.URL.Address == "" {
+	for _, link := range request.Links {
+		if link.URL == nil || link.URL.Address == nil {
 			Respond(w, http.StatusBadRequest, "The address field must be specified.", []interface{}{})
 			return
 		}
-		link.Sender = b.AuthDevice.ID
-		link.Receiver = device.ID
-		link.Unread = true
-		links = append(links, link)
+		unread := true
+		if link.Unread != nil {
+			unread = *link.Unread
+		}
+		newLink := twocloud.Link{
+			URL: &twocloud.URL{
+				Address: *link.URL.Address,
+			},
+			Unread:       unread,
+			Sender:       b.AuthDevice.ID,
+			Receiver:     device.ID,
+			ReceiverUser: device.UserID,
+			Comment:      link.Comment,
+		}
+		links = append(links, newLink)
 	}
 	links, err = b.Persister.AddLinks(links)
 	if err != nil {
@@ -237,6 +249,27 @@ func getLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 
 func updateLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	username := r.URL.Query().Get(":username")
+	id, err := strconv.ParseUint(r.URL.Query().Get(":device"), 10, 64)
+	if err != nil {
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
+		return
+	}
+	linkID, err := strconv.ParseUint(r.URL.Query().Get(":link"), 10, 64)
+	if err != nil {
+		Respond(w, http.StatusBadRequest, "Invalid link ID", []interface{}{})
+		return
+	}
+	request, err := getRequest(r)
+	if err != nil {
+		b.Persister.Log.Error(err.Error())
+		if isUnmarshalError(err) {
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		} else {
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		}
+		return
+	}
 	user, err := b.getUser(username)
 	if err != nil {
 		if err == UnauthorisedAccessAttempt {
@@ -248,12 +281,6 @@ func updateLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 			return
 		}
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
-		return
-	}
-	id, err := strconv.ParseUint(r.URL.Query().Get(":device"), 10, 64)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Invalid device ID.", []interface{}{})
 		return
 	}
 	device, err := b.getDevice(twocloud.ID(id))
@@ -273,11 +300,6 @@ func updateLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{})
 		return
 	}
-	linkID, err := strconv.ParseUint(r.URL.Query().Get(":link"), 10, 64)
-	if err != nil {
-		Respond(w, http.StatusBadRequest, "Invalid link ID", []interface{}{})
-		return
-	}
 	link, err := b.Persister.GetLink(twocloud.ID(linkID))
 	if err != nil {
 		if err == twocloud.LinkNotFoundError {
@@ -287,29 +309,12 @@ func updateLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	var req twocloud.Link
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
-		return
-	}
-	err = json.Unmarshal(body, &req)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
-		return
-	}
-	if req.URL != nil {
-		Respond(w, http.StatusBadRequest, "URL cannot be modified.", []interface{}{})
-		return
-	}
-	unread := link.Unread
-	comment := link.Comment
-	if device.ID == link.Sender {
-		comment = req.Comment
-	} else if device.ID == link.Receiver {
-		unread = req.Unread
+	unread := request.Link.Unread
+	comment := request.Link.Comment
+	if device.ID != link.Sender {
+		comment = nil
+	} else if device.ID != link.Receiver {
+		unread = nil
 	}
 	link, err = b.Persister.UpdateLink(link, unread, comment)
 	if err != nil {

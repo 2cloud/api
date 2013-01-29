@@ -1,25 +1,24 @@
 package main
 
 import (
-	"encoding/json"
 	"get.2cloud.org/twocloud"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
 )
 
-type accountAndUserRequest struct {
-	Account twocloud.Account `json:"account"`
-	User    twocloud.User    `json:"user"`
+type user struct {
+	Username *string `json:"username,omitempty"`
+	Email    *string `json:"email,omitempty"`
+	Name     *struct {
+		Given  *string `json:"given,omitempty"`
+		Family *string `json:"family,omitempty"`
+	} `json:"name,omitempty"`
+	Admin             *bool `json:"admin,omitempty"`
+	ReceiveNewsletter *bool `json:"receive_newsletter,omitempty"`
 }
 
-type modifyUserRequest struct {
-	User   twocloud.User `json:"user"`
-	Fields []string      `json:"fields"`
-}
-
-type verifyEmailRequest struct {
+type emailVerification struct {
 	Code string `json:"code"`
 }
 
@@ -100,24 +99,25 @@ func getUsers(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 }
 
 func createUser(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
-	var req accountAndUserRequest
-	body, err := ioutil.ReadAll(r.Body)
+	request, err := getRequest(r)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		if isUnmarshalError(err) {
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		} else {
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		}
 		return
 	}
-	err = json.Unmarshal(body, &req)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
-		return
-	}
-	if req.Account.ID == 0 {
+	if request.Account == nil || request.Account.ID == 0 {
 		Respond(w, http.StatusBadRequest, "Account ID must be specified.", []interface{}{})
 		return
 	}
-	account, err := b.Persister.GetAccountByID(req.Account.ID)
+	if request.User == nil {
+		Respond(w, http.StatusBadRequest, "Must include a user object.", []interface{}{})
+		return
+	}
+	account, err := b.Persister.GetAccountByID(request.Account.ID)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
@@ -131,11 +131,24 @@ func createUser(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusConflict, "Account already registered.", []interface{}{})
 		return
 	}
-	if req.User.Username == "" {
+	if request.User.Username == nil {
 		Respond(w, http.StatusBadRequest, "Username must be specified.", []interface{}{})
 		return
 	}
-	user, err := b.Persister.Register(req.User.Username, req.User.Email, req.User.Name.Given, req.User.Name.Family, true, false, req.User.ReceiveNewsletter)
+	if request.User.Email == nil {
+		Respond(w, http.StatusBadRequest, "Email must be specified.", []interface{}{})
+		return
+	}
+	var given_name, family_name *string
+	if request.User.Name != nil {
+		given_name = request.User.Name.Given
+		family_name = request.User.Name.Family
+	}
+	newsletter := false
+	if request.User.ReceiveNewsletter != nil {
+		newsletter = *request.User.ReceiveNewsletter
+	}
+	user, err := b.Persister.Register(*request.User.Username, *request.User.Email, given_name, family_name, true, false, newsletter)
 	if err != nil {
 		if err == twocloud.MissingEmailError {
 			Respond(w, http.StatusBadRequest, "Email must be specified.", []interface{}{})
@@ -189,7 +202,6 @@ func getUser(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 }
 
 func updateUser(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
-	var req modifyUserRequest
 	username := r.URL.Query().Get(":username")
 	user, err := b.getUser(username)
 	if err != nil {
@@ -204,69 +216,43 @@ func updateUser(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	body, err := ioutil.ReadAll(r.Body)
+	request, err := getRequest(r)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
-		return
-	}
-	err = json.Unmarshal(body, &req)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
-		return
-	}
-	email := user.Email
-	given_name := user.Name.Given
-	family_name := user.Name.Family
-	name_changed := false
-	admin := false
-	for _, field := range req.Fields {
-		switch field {
-		case "email":
-			if req.User.Email == "" {
-				Respond(w, http.StatusBadRequest, "Email cannot be empty.", []interface{}{})
-				return
-			}
-			email = req.User.Email
-			break
-		case "name.given":
-			given_name = req.User.Name.Given
-			name_changed = true
-			break
-		case "name.family":
-			family_name = req.User.Name.Family
-			name_changed = true
-			break
-		case "admin":
-			if !b.AuthUser.IsAdmin {
-				Respond(w, http.StatusForbidden, "You don't have the ability to grant or revoke admin status.", []interface{}{})
-				return
-			}
-			admin = true
-			break
+		if isUnmarshalError(err) {
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		} else {
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		}
+		return
 	}
-	err = b.Persister.UpdateUser(user, email, given_name, family_name, name_changed)
+	if request.User == nil {
+		Respond(w, http.StatusBadRequest, "Request must include user.", []interface{}{})
+		return
+	}
+	if !b.AuthUser.IsAdmin && request.User.Admin != nil {
+		Respond(w, http.StatusForbidden, "You need to be an administrator before you can grant or remove admin privileges.", []interface{}{})
+		return
+	}
+	if request.User.Email != nil && *request.User.Email == "" {
+		Respond(w, http.StatusBadRequest, "Email must be specified or omitted.", []interface{}{})
+		return
+	}
+	err = b.Persister.UpdateUser(&user, request.User.Email, request.User.Name.Given, request.User.Name.Family, request.User.ReceiveNewsletter)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
 	}
-	user.Email = email
-	if name_changed {
-		user.Name.Given = given_name
-		user.Name.Family = family_name
-	}
-	if admin {
-		if req.User.IsAdmin && !user.IsAdmin {
+	if request.User.Admin != nil {
+		if *request.User.Admin && !user.IsAdmin {
 			err = b.Persister.MakeAdmin(&user)
 			if err != nil {
 				b.Persister.Log.Error(err.Error())
 				Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 				return
 			}
-		} else if !req.User.IsAdmin && user.IsAdmin {
+		} else if !*request.User.Admin && user.IsAdmin {
 			err = b.Persister.StripAdmin(&user)
 			if err != nil {
 				b.Persister.Log.Error(err.Error())
@@ -355,7 +341,6 @@ func resetSecret(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 }
 
 func verifyEmail(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
-	var req verifyEmailRequest
 	username := r.URL.Query().Get(":username")
 	user, err := b.getUser(username)
 	if err != nil {
@@ -370,23 +355,21 @@ func verifyEmail(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	body, err := ioutil.ReadAll(r.Body)
+	request, err := getRequest(r)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		if isUnmarshalError(err) {
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		} else {
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		}
 		return
 	}
-	err = json.Unmarshal(body, &req)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
-		return
-	}
-	if req.Code == "" {
+	if request.EmailVerification == nil || request.EmailVerification.Code == "" {
 		Respond(w, http.StatusBadRequest, "Code must be set.", []interface{}{})
 		return
 	}
-	err = b.Persister.VerifyEmail(&user, req.Code)
+	err = b.Persister.VerifyEmail(&user, request.EmailVerification.Code)
 	if err == twocloud.InvalidConfirmationCodeError {
 		Respond(w, http.StatusBadRequest, "Invalid confirmation code.", []interface{}{})
 		return

@@ -1,13 +1,15 @@
 package main
 
 import (
-	"encoding/json"
 	"get.2cloud.org/twocloud"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
 )
+
+type subscription struct {
+	Expires time.Time `json:"expires,omitempty"`
+}
 
 func getGraceSubscriptions(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	if !b.AuthUser.IsAdmin {
@@ -72,7 +74,7 @@ func getUserSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundl
 	return
 }
 
-func createSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+func startSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	username := r.URL.Query().Get(":username")
 	user, err := b.getUser(username)
 	if err != nil {
@@ -87,73 +89,55 @@ func createSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	var req twocloud.Subscription
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
-		return
-	}
-	err = json.Unmarshal(body, &req)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
-		return
-	}
-	subscription, err := b.Persister.CreateSubscription(user.ID, req.FundingID, req.FundingSource, req.AutoRenew)
+	err = b.Persister.StartRenewingSubscription(user.Subscription)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	user.Subscription = subscription
-	Respond(w, http.StatusOK, "Successfully created the subscription", []interface{}{user.Subscription})
+	Respond(w, http.StatusOK, "Successfully set the subscription to auto-renew.", []interface{}{user.Subscription})
 	return
 }
 
 func updateSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
+	if !b.AuthUser.IsAdmin {
+		Respond(w, http.StatusUnauthorized, "You need administrative credentials to update a user's subscription.", []interface{}{})
+		return
+	}
 	username := r.URL.Query().Get(":username")
 	user, err := b.getUser(username)
 	if err != nil {
-		if err == UnauthorisedAccessAttempt {
-			Respond(w, http.StatusUnauthorized, "You don't have access to that user's subscription.", []interface{}{})
-			return
-		}
 		if err == twocloud.UserNotFoundError {
 			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
 			return
 		}
+		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	var req twocloud.Subscription
-	body, err := ioutil.ReadAll(r.Body)
+	request, err := getRequest(r)
+	if err != nil {
+		b.Persister.Log.Error(err.Error())
+		if isUnmarshalError(err) {
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+		} else {
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		}
+		return
+	}
+	if request.Subscription == nil {
+		Respond(w, http.StatusBadRequest, "Subscription must be included in request.", []interface{}{})
+		return
+	}
+	if request.Subscription.Expires.IsZero() {
+		Respond(w, http.StatusBadRequest, "Subscription expiration must be set.", []interface{}{})
+		return
+	}
+	err = b.Persister.UpdateSubscriptionExpiration(user.Subscription, request.Subscription.Expires)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
-	}
-	err = json.Unmarshal(body, &req)
-	if err != nil {
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
-		return
-	}
-	if req.FundingID != 0 && req.FundingSource != "" {
-		err = b.Persister.UpdateSubscriptionPaymentSource(user.Subscription, req.FundingID, req.FundingSource)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
-			return
-		}
-	}
-	if b.AuthUser.IsAdmin {
-		err = b.Persister.UpdateSubscriptionExpiration(user.Subscription, req.Expires)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
-			return
-		}
 	}
 	Respond(w, http.StatusOK, "Successfully updated the subscription", []interface{}{user.Subscription})
 	return
@@ -174,13 +158,12 @@ func cancelSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	sub := *user.Subscription
 	err = b.Persister.CancelRenewingSubscription(user.Subscription)
 	if err != nil {
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
 		return
 	}
-	Respond(w, http.StatusOK, "Successfully canceled the subscription", []interface{}{sub})
+	Respond(w, http.StatusOK, "Successfully canceled the subscription", []interface{}{user.Subscription})
 	return
 
 }
