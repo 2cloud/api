@@ -386,6 +386,3 @@ func deleteLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	Respond(w, http.StatusOK, "Successfully deleted the link", []interface{}{link})
 	return
 }
-
-func auditLink(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
-}

@@ -104,7 +104,7 @@ func oauthToken(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		}
 		return
 	}
-	if request.Tokens.Access == nil {
+	if request.Tokens == nil || request.Tokens.Access == nil {
 		Respond(w, http.StatusBadRequest, "Access token must be supplied.", []interface{}{})
 		return
 	}
@@ -127,6 +127,15 @@ func oauthToken(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 			b.Persister.Log.Error(err.Error())
 			Respond(w, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{})
 			return
+		}
+		subscription, err := b.Persister.GetSubscriptionByUser(user.ID)
+		if err != nil {
+			b.Persister.Log.Error(err.Error())
+			Respond(w, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{})
+			return
+		}
+		if !subscription.Active {
+			w.Header().Set("Warning", "299 2cloud \"Your subscription has expired. It expired on "+subscription.Expires.Format("Jan 02, 2006")+".\"")
 		}
 		setLastModified(w, user.LastActive)
 		Respond(w, http.StatusOK, "Successfully authenticated the user", []interface{}{user})
@@ -280,7 +289,4 @@ func authTmpCredentials(w http.ResponseWriter, r *http.Request, b *RequestBundle
 	}
 	Respond(w, http.StatusOK, "Successfully authenticated the user", []interface{}{user})
 	return
-}
-
-func auditAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 }

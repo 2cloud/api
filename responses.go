@@ -19,6 +19,7 @@ type Response struct {
 	Subscriptions []twocloud.Subscription `json:"subscriptions,omitempty"`
 	Users         []twocloud.User         `json:"users,omitempty"`
 	Credentials   *Credentials            `json:"credentials,omitempty"`
+	Errors        []Error                 `json:"errors,omitempty"`
 }
 
 func Respond(w http.ResponseWriter, code int, msg string, elems []interface{}) {
@@ -140,6 +141,20 @@ func Respond(w http.ResponseWriter, code int, msg string, elems []interface{}) {
 		case *Credentials:
 			contentTypes["credentials"] = true
 			resp.Credentials = d
+		case Error:
+			contentTypes["errors"] = true
+			resp.Errors = append(resp.Errors, d)
+		case *Error:
+			contentTypes["errors"] = true
+			resp.Errors = append(resp.Errors, *d)
+		case []Error:
+			contentTypes["errors"] = true
+			resp.Errors = append(resp.Errors, d...)
+		case []*Error:
+			contentTypes["errors"] = true
+			for _, e := range d {
+				resp.Errors = append(resp.Errors, *e)
+			}
 		}
 	}
 	contentType := "application"

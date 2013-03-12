@@ -258,6 +258,3 @@ func deleteDevice(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	Respond(w, http.StatusOK, "Successfully deleted the device", []interface{}{device})
 	return
 }
-
-func auditDevice(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
-}

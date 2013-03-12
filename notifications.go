@@ -411,6 +411,3 @@ func deleteNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle
 	Respond(w, http.StatusOK, "Successfully deleted the notification", []interface{}{notification})
 	return
 }
-
-func auditNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
-}

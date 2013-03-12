@@ -51,9 +51,6 @@ func AuthenticateRequest(w http.ResponseWriter, r *http.Request, deviceRequired 
 		Respond(w, http.StatusUnauthorized, "Invalid credentials.", []interface{}{})
 		return false
 	} else if _, ok := err.(*twocloud.SubscriptionExpiredError); ok {
-		Respond(w, http.StatusPaymentRequired, "Your subscription has expired.", []interface{}{})
-		return false
-	} else if _, ok := err.(*twocloud.SubscriptionExpiredWarning); ok {
 		w.Header().Set("Warning", "299 2cloud \""+err.Error()+"\"")
 	} else if err != nil {
 		bundle.Persister.Log.Error(err.Error())
@@ -220,8 +217,6 @@ func main() {
 	router.Del("/accounts/:account", newRequest(removeAccount, true))
 	router.Post("/accounts/:account", newRequest(refreshAccount, true))
 
-	router.Get("/accounts/:account/audit", newRequest(auditAccount, true))
-
 	// Users
 	router.Get("/users", newRequest(getUsers, true))
 	router.Post("/users", devicelessRequest(createUser, false))
@@ -232,16 +227,12 @@ func main() {
 	router.Post("/users/:username/secret", newRequest(resetSecret, true))
 	router.Put("/users/:username/verify", devicelessRequest(verifyEmail, true))
 
-	router.Get("/users/:username/audit", newRequest(auditUser, true))
-
 	// Devices
 	router.Get("/users/:username/devices", devicelessRequest(getDevices, true))
 	router.Post("/users/:username/devices", devicelessRequest(newDevice, true))
 	router.Get("/users/:username/devices/:device", newRequest(getDevice, true))
 	router.Put("/users/:username/devices/:device", newRequest(updateDevice, true))
 	router.Del("/users/:username/devices/:device", newRequest(deleteDevice, true))
-
-	router.Get("/users/:username/devices/:device/audit", newRequest(auditDevice, true))
 
 	// Links
 	router.Get("/users/:username/links", newRequest(getLinks, true))
@@ -250,8 +241,6 @@ func main() {
 	router.Get("/users/:username/devices/:device/links/:link", newRequest(getLink, true))
 	router.Put("/users/:username/devices/:device/links/:link", newRequest(updateLink, true))
 	router.Del("/users/:username/devices/:device/links/:link", newRequest(deleteLink, true))
-
-	router.Get("/users/:username/devices/:device/links/:link/audit", newRequest(auditLink, true))
 
 	// Notifications
 	router.Get("/users/:username/devices/:device/notifications", newRequest(getNotifications, true))
@@ -265,8 +254,6 @@ func main() {
 	router.Put("/users/:username/notifications/:notification", newRequest(markNotificationRead, true))
 	router.Del("/users/:username/notifications/:notification", newRequest(deleteNotification, true))
 
-	router.Get("/users/:username/notifications/:notification/audit", newRequest(auditNotification, true))
-
 	// Subscriptions
 	router.Get("/subscriptions/in_grace_period", newRequest(getGraceSubscriptions, true))
 	router.Get("/users/:username/subscription", newRequest(getUserSubscription, true))
@@ -274,8 +261,6 @@ func main() {
 	router.Post("/users/:username/subscription", devicelessRequest(startSubscription, true))
 	router.Put("/users/:username/subscription", newRequest(updateSubscription, true))
 	router.Del("/users/:username/subscription", newRequest(cancelSubscription, true))
-
-	router.Get("/users/:username/subscription/audit", newRequest(auditSubscription, true))
 
 	os.Stdout.WriteString("Listening on port " + port + "\n")
 	err = http.ListenAndServe(":"+port, router)

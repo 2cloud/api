@@ -381,6 +381,3 @@ func verifyEmail(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	Respond(w, http.StatusOK, "Successfully verified email address", []interface{}{user})
 	return
 }
-
-func auditUser(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
-}
