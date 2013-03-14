@@ -21,17 +21,21 @@ type tokens struct {
 
 type Credentials [2]string
 
+var cbMissingError = errors.New("Missing callback.")
+var cbNotURLError = errors.New("Callback is not a valid URL.")
+var cbBadFormattingError = errors.New("Callback cannot have a % unless it is followed by two hexadecimal characters.")
+
 func parseCallback(callback string) (*url.URL, error) {
 	if callback == "" {
-		return nil, errors.New("Callback must be specified.")
+		return nil, cbMissingError
 	}
 	_, err := url.QueryUnescape(callback)
 	if err != nil {
-		return nil, errors.New("Bad callback formatting.")
+		return nil, cbBadFormattingError
 	}
 	cbURL, err := url.Parse(callback)
 	if err != nil {
-		return nil, errors.New("Invalid callback URL")
+		return nil, cbNotURLError
 	}
 	return cbURL, nil
 }
@@ -40,7 +44,14 @@ func oauthRedirect(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	callback := r.URL.Query().Get("callback")
 	_, err := parseCallback(callback)
 	if err != nil {
-		Respond(w, http.StatusBadRequest, err.Error(), []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		if err == cbMissingError {
+			Respond(w, http.StatusBadRequest, err.Error(), []interface{}{MissingParam("callback")})
+		} else if err == cbNotURLError {
+			Respond(w, http.StatusBadRequest, err.Error(), []interface{}{InvalidValue("callback")})
+		} else if err == cbBadFormattingError {
+			Respond(w, http.StatusBadRequest, err.Error(), []interface{}{InvalidFormat("callback")})
+		}
 		return
 	}
 	url := twocloud.GetGoogleAuthURL(b.Persister.Config.OAuth, callback)
@@ -51,23 +62,38 @@ func oauthRedirect(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 func oauthCallback(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		Respond(w, http.StatusBadRequest, "No auth code specified.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "No auth code specified.", []interface{}{MissingParam("code")})
 		return
 	}
 	state := r.URL.Query().Get("state")
 	callback, err := parseCallback(state)
 	if err != nil {
-		Respond(w, http.StatusBadRequest, err.Error(), []interface{}{})
+		b.Persister.Log.Error(err.Error())
+		if err == cbMissingError {
+			Respond(w, http.StatusBadRequest, err.Error(), []interface{}{MissingParam("state")})
+		} else if err == cbNotURLError {
+			Respond(w, http.StatusBadRequest, err.Error(), []interface{}{InvalidValue("state")})
+		} else if err == cbBadFormattingError {
+			Respond(w, http.StatusBadRequest, err.Error(), []interface{}{InvalidFormat("state")})
+		}
 		return
 	}
 	access, refresh, exp, err := twocloud.GetGoogleAccessToken(b.Persister.Config.OAuth, code)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return
 	}
 	account, err := b.Persister.GetAccountByTokens(access, refresh, exp)
 	if err != nil {
+		if err == twocloud.OAuthAuthError {
+			Respond(w, http.StatusUnauthorized, err.Error(), []interface{}{AccessDenied("")})
+			return
+		} else if oauthError, ok := err.(twocloud.OAuthError); ok {
+			b.Persister.Log.Error(err.Error())
+			Respond(w, http.StatusInternalServerError, oauthError.Error(), []interface{}{ActOfGod("")})
+			return
+		}
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
@@ -98,24 +124,25 @@ func oauthToken(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		if isUnmarshalError(err) {
-			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{BadRequestFormat("")})
 		} else {
 			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		}
 		return
 	}
 	if request.Tokens == nil || request.Tokens.Access == nil {
-		Respond(w, http.StatusBadRequest, "Access token must be supplied.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Access token must be supplied.", []interface{}{MissingParam("tokens.access")})
 		return
 	}
 	account, err := b.Persister.GetAccountByTokens(request.Tokens.Access, request.Tokens.Refresh, request.Tokens.Expires)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		if err == twocloud.OAuthAuthError {
-			Respond(w, http.StatusUnauthorized, err.Error(), []interface{}{})
+			Respond(w, http.StatusUnauthorized, err.Error(), []interface{}{InvalidValue("tokens.access")})
 			return
 		} else if oauthError, ok := err.(twocloud.OAuthError); ok {
-			Respond(w, http.StatusUnauthorized, oauthError.Error(), []interface{}{})
+			b.Persister.Log.Error(oauthError.Error())
+			Respond(w, http.StatusInternalServerError, oauthError.Error(), []interface{}{ActOfGod("")})
 			return
 		}
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
@@ -127,15 +154,6 @@ func oauthToken(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 			b.Persister.Log.Error(err.Error())
 			Respond(w, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{})
 			return
-		}
-		subscription, err := b.Persister.GetSubscriptionByUser(user.ID)
-		if err != nil {
-			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{})
-			return
-		}
-		if !subscription.Active {
-			w.Header().Set("Warning", "299 2cloud \"Your subscription has expired. It expired on "+subscription.Expires.Format("Jan 02, 2006")+".\"")
 		}
 		setLastModified(w, user.LastActive)
 		Respond(w, http.StatusOK, "Successfully authenticated the user", []interface{}{user})
@@ -149,26 +167,26 @@ func oauthToken(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	accountID := r.URL.Query().Get(":account")
 	if accountID == "" {
-		Respond(w, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Must specify an account ID.", []interface{}{MissingParam("id")})
 		return
 	}
 	id, err := strconv.ParseUint(accountID, 10, 64)
 	if err != nil {
-		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{InvalidFormat("id")})
 		return
 	}
 	request, err := getRequest(r)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		if isUnmarshalError(err) {
-			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{BadRequestFormat("")})
 		} else {
 			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		}
 		return
 	}
 	if request.Tokens.Access == nil {
-		Respond(w, http.StatusBadRequest, "Access token must be supplied.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Access token must be supplied.", []interface{}{MissingParam("tokens.access")})
 		return
 	}
 	account, err := b.Persister.GetAccountByID(twocloud.ID(id))
@@ -178,7 +196,7 @@ func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundl
 		return
 	}
 	if account.UserID != b.AuthUser.ID && !b.AuthUser.IsAdmin {
-		Respond(w, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
+		Respond(w, http.StatusForbidden, "You don't have access to that account.", []interface{}{AccessDenied("")})
 		return
 	}
 	err = b.Persister.UpdateAccountTokens(account, request.Tokens.Access, request.Tokens.Refresh, request.Tokens.Expires)
@@ -194,12 +212,12 @@ func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundl
 func removeAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	accountID := r.URL.Query().Get(":account")
 	if accountID == "" {
-		Respond(w, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Must specify an account ID.", []interface{}{MissingParam("id")})
 		return
 	}
 	id, err := strconv.ParseUint(accountID, 10, 64)
 	if err != nil {
-		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{InvalidFormat("id")})
 		return
 	}
 	account, err := b.Persister.GetAccountByID(twocloud.ID(id))
@@ -209,7 +227,7 @@ func removeAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		return
 	}
 	if account.UserID != b.AuthUser.ID && !b.AuthUser.IsAdmin {
-		Respond(w, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
+		Respond(w, http.StatusForbidden, "You don't have access to that account.", []interface{}{AccessDenied("")})
 		return
 	}
 	err = b.Persister.DeleteAccount(account)
@@ -225,12 +243,12 @@ func removeAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 func refreshAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	accountID := r.URL.Query().Get(":account")
 	if accountID == "" {
-		Respond(w, http.StatusBadRequest, "Must specify an account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Must specify an account ID.", []interface{}{MissingParam("id")})
 		return
 	}
 	id, err := strconv.ParseUint(accountID, 10, 64)
 	if err != nil {
-		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Invalid account ID.", []interface{}{InvalidFormat("id")})
 		return
 	}
 	account, err := b.Persister.GetAccountByID(twocloud.ID(id))
@@ -240,7 +258,7 @@ func refreshAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		return
 	}
 	if account.UserID != b.AuthUser.ID && !b.AuthUser.IsAdmin {
-		Respond(w, http.StatusForbidden, "You don't have access to that account.", []interface{}{})
+		Respond(w, http.StatusForbidden, "You don't have access to that account.", []interface{}{AccessDenied("")})
 		return
 	}
 	account, err = b.Persister.UpdateAccountData(account)
@@ -269,12 +287,12 @@ func authTmpCredentials(w http.ResponseWriter, r *http.Request, b *RequestBundle
 	cred1 := r.URL.Query().Get("cred1")
 	cred2 := r.URL.Query().Get("cred2")
 	if cred1 == "" || cred2 == "" {
-		Respond(w, http.StatusBadRequest, "Both temporary credentials must be supplied", []interface{}{})
+		Respond(w, http.StatusBadRequest, "Both temporary credentials must be supplied", []interface{}{MissingParam("")})
 		return
 	}
 	id, err := b.Persister.CheckTempCredentials(cred1, cred2)
 	if err == twocloud.InvalidCredentialsError {
-		Respond(w, http.StatusUnauthorized, "Invalid credentials", []interface{}{})
+		Respond(w, http.StatusUnauthorized, "Invalid credentials", []interface{}{InvalidValue("")})
 		return
 	} else if err != nil {
 		b.Persister.Log.Error(err.Error())

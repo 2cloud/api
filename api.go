@@ -16,29 +16,30 @@ import (
 )
 
 var config twocloud.Config
+var VERSION = "1.0.0"
 
 func AuthenticateRequest(w http.ResponseWriter, r *http.Request, deviceRequired bool, bundle *RequestBundle) bool {
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
-		Respond(w, http.StatusUnauthorized, "No credentials supplied.", []interface{}{})
+		Respond(w, http.StatusUnauthorized, "No credentials supplied.", []interface{}{MissingParam("headers.authorization")})
 		return false
 	}
 	parts := strings.SplitN(auth, " ", 2)
 	if len(parts) != 2 || parts[0] != "Basic" {
-		Respond(w, http.StatusUnauthorized, "Invalid credentials.", []interface{}{})
+		Respond(w, http.StatusUnauthorized, "Invalid credentials.", []interface{}{InvalidFormat("headers.authorization")})
 		return false
 	}
 	decoded, err := base64.StdEncoding.DecodeString(parts[1])
 	if err != nil {
 		bundle.Persister.Log.Error(err.Error())
 		w.WriteHeader(http.StatusUnauthorized)
-		Respond(w, http.StatusUnauthorized, "Error while decoding credentials.", []interface{}{})
+		Respond(w, http.StatusUnauthorized, "Error while decoding credentials.", []interface{}{InvalidFormat("headers.authorization")})
 		return false
 	}
 	credentials := strings.SplitN(string(decoded), ":", 2)
 	if len(credentials) != 2 {
 		w.WriteHeader(http.StatusUnauthorized)
-		Respond(w, http.StatusUnauthorized, "No credentials supplied.", []interface{}{})
+		Respond(w, http.StatusUnauthorized, "No credentials supplied.", []interface{}{InvalidFormat("headers.authorization")})
 		return false
 	}
 	user := credentials[0]
@@ -47,11 +48,10 @@ func AuthenticateRequest(w http.ResponseWriter, r *http.Request, deviceRequired 
 	if err == twocloud.InvalidCredentialsError || err == twocloud.UserNotFoundError {
 		if err == twocloud.InvalidCredentialsError {
 			bundle.Persister.Log.Warn("Invalid auth attempt on %s's account.", user)
+			Respond(w, http.StatusUnauthorized, "Invalid credentials.", []interface{}{InvalidValue("headers.authorization")})
 		}
-		Respond(w, http.StatusUnauthorized, "Invalid credentials.", []interface{}{})
+		Respond(w, http.StatusUnauthorized, "Invalid credentials.", []interface{}{NotFound("headers.authorization.username")})
 		return false
-	} else if _, ok := err.(*twocloud.SubscriptionExpiredError); ok {
-		w.Header().Set("Warning", "299 2cloud \""+err.Error()+"\"")
 	} else if err != nil {
 		bundle.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
@@ -60,19 +60,19 @@ func AuthenticateRequest(w http.ResponseWriter, r *http.Request, deviceRequired 
 	bundle.AuthUser = &authUser
 	if deviceRequired {
 		if r.Header.Get("From") == "" {
-			Respond(w, http.StatusBadRequest, "From header not set.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "From header not set.", []interface{}{MissingParam("headers.from")})
 			return false
 		}
 		deviceId, err := strconv.ParseUint(r.Header.Get("From"), 10, 64)
 		if err != nil {
 			bundle.Persister.Log.Debug(err.Error())
-			Respond(w, http.StatusBadRequest, "From header must be an integer.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "From header must be an integer.", []interface{}{InvalidFormat("headers.from")})
 			return false
 		}
 		device, err := bundle.Persister.GetDevice(twocloud.ID(deviceId))
 		if err != nil {
 			if err == twocloud.DeviceNotFoundError {
-				Respond(w, http.StatusBadRequest, "From header not a valid device ID.", []interface{}{})
+				Respond(w, http.StatusBadRequest, "From header not a valid device ID.", []interface{}{NotFound("headers.from")})
 				return false
 			}
 			bundle.Persister.Log.Error(err.Error())
@@ -80,7 +80,7 @@ func AuthenticateRequest(w http.ResponseWriter, r *http.Request, deviceRequired 
 			return false
 		}
 		if device.UserID != bundle.AuthUser.ID && !bundle.AuthUser.IsAdmin {
-			Respond(w, http.StatusBadRequest, "From header set to a device you do not own.", []interface{}{})
+			Respond(w, http.StatusBadRequest, "From header set to a device you do not own.", []interface{}{AccessDenied("headers.from")})
 			return false
 		}
 		device, err = bundle.Persister.UpdateDeviceLastSeen(device, r.RemoteAddr)
@@ -163,9 +163,6 @@ func (rb *Request) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		os.Stdout.WriteString("Error creating Persister: " + err.Error() + "\n")
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
 		return
-	}
-	if p.Auditor != nil {
-		p.Auditor.Request = r
 	}
 	bundle := newBundle(p)
 	if !rb.AuthRequired || AuthenticateRequest(w, r, rb.DeviceRequired, bundle) {

@@ -172,6 +172,7 @@ func Respond(w http.ResponseWriter, code int, msg string, elems []interface{}) {
 	sort.Strings(sortedContentTypes)
 	contentType = contentType + strings.Join(sortedContentTypes, ",") + "/json"
 	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("API-Version", VERSION)
 	w.WriteHeader(code)
 	enc := json.NewEncoder(w)
 	err := enc.Encode(resp)

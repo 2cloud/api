@@ -292,14 +292,18 @@ func deleteUser(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 
 func getUserAccounts(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	username := r.URL.Query().Get(":username")
+	if username == "" {
+		Respond(w, http.StatusBadRequest, "Username must be specified.", []interface{}{MissingParam("username")})
+		return
+	}
 	user, err := b.getUser(username)
 	if err != nil {
 		if err == UnauthorisedAccessAttempt {
-			Respond(w, http.StatusUnauthorized, "You don't have access to that user's accounts.", []interface{}{})
+			Respond(w, http.StatusUnauthorized, "You don't have access to that user's accounts.", []interface{}{AccessDenied("")})
 			return
 		}
 		if err == twocloud.UserNotFoundError {
-			Respond(w, http.StatusNotFound, "User not found.", []interface{}{})
+			Respond(w, http.StatusNotFound, "User not found.", []interface{}{NotFound("")})
 			return
 		}
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
