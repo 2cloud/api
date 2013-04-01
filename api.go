@@ -54,7 +54,7 @@ func AuthenticateRequest(w http.ResponseWriter, r *http.Request, deviceRequired 
 		return false
 	} else if err != nil {
 		bundle.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return false
 	}
 	bundle.AuthUser = &authUser
@@ -76,7 +76,7 @@ func AuthenticateRequest(w http.ResponseWriter, r *http.Request, deviceRequired 
 				return false
 			}
 			bundle.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 			return false
 		}
 		if device.UserID != bundle.AuthUser.ID && !bundle.AuthUser.IsAdmin {
@@ -85,7 +85,7 @@ func AuthenticateRequest(w http.ResponseWriter, r *http.Request, deviceRequired 
 		}
 		device, err = bundle.Persister.UpdateDeviceLastSeen(device, r.RemoteAddr)
 		if err != nil {
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 			return false
 		}
 		bundle.AuthDevice = &device
@@ -161,7 +161,7 @@ func (rb *Request) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer p.Close()
 	if err != nil {
 		os.Stdout.WriteString("Error creating Persister: " + err.Error() + "\n")
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return
 	}
 	bundle := newBundle(p)
