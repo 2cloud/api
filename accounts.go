@@ -95,7 +95,7 @@ func oauthCallback(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 			return
 		}
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return
 	}
 	values := callback.Query()
@@ -103,7 +103,7 @@ func oauthCallback(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		user, err := b.Persister.GetUser(account.UserID)
 		if err != nil {
 			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{})
+			Respond(w, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{ActOfGod("")})
 			return
 		}
 		values.Set("user", user.Username)
@@ -126,7 +126,7 @@ func oauthToken(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		if isUnmarshalError(err) {
 			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{BadRequestFormat("")})
 		} else {
-			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		}
 		return
 	}
@@ -145,14 +145,14 @@ func oauthToken(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 			Respond(w, http.StatusInternalServerError, oauthError.Error(), []interface{}{ActOfGod("")})
 			return
 		}
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return
 	}
 	if account.UserID != 0 {
 		user, err := b.Persister.GetUser(account.UserID)
 		if err != nil {
 			b.Persister.Log.Error(err.Error())
-			Respond(w, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{})
+			Respond(w, http.StatusInternalServerError, "Error while logging you in. We're looking into it.", []interface{}{ActOfGod("")})
 			return
 		}
 		setLastModified(w, user.LastActive)
@@ -181,7 +181,7 @@ func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundl
 		if isUnmarshalError(err) {
 			Respond(w, http.StatusBadRequest, "Error decoding request.", []interface{}{BadRequestFormat("")})
 		} else {
-			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+			Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		}
 		return
 	}
@@ -192,7 +192,7 @@ func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundl
 	account, err := b.Persister.GetAccountByID(twocloud.ID(id))
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
 	if account.UserID != b.AuthUser.ID && !b.AuthUser.IsAdmin {
@@ -202,7 +202,7 @@ func updateAccountTokens(w http.ResponseWriter, r *http.Request, b *RequestBundl
 	err = b.Persister.UpdateAccountTokens(account, request.Tokens.Access, request.Tokens.Refresh, request.Tokens.Expires)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
 	Respond(w, http.StatusOK, "Successfully updated the account tokens", []interface{}{account})
@@ -223,7 +223,7 @@ func removeAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	account, err := b.Persister.GetAccountByID(twocloud.ID(id))
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
 	if account.UserID != b.AuthUser.ID && !b.AuthUser.IsAdmin {
@@ -233,7 +233,7 @@ func removeAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	err = b.Persister.DeleteAccount(account)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
 	Respond(w, http.StatusOK, "Successfully deleted the account", []interface{}{account})
@@ -254,7 +254,7 @@ func refreshAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	account, err := b.Persister.GetAccountByID(twocloud.ID(id))
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
 	if account.UserID != b.AuthUser.ID && !b.AuthUser.IsAdmin {
@@ -264,7 +264,7 @@ func refreshAccount(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	account, err = b.Persister.UpdateAccountData(account)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
 	Respond(w, http.StatusOK, "Successfully updated the account", []interface{}{account})
@@ -275,7 +275,7 @@ func generateTmpCredentials(w http.ResponseWriter, r *http.Request, b *RequestBu
 	strs, err := b.Persister.CreateTempCredentials(*b.AuthUser)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return
 	}
 	creds := Credentials(strs)
@@ -296,13 +296,13 @@ func authTmpCredentials(w http.ResponseWriter, r *http.Request, b *RequestBundle
 		return
 	} else if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
 	user, err := b.Persister.GetUser(id)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{})
+		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
 	Respond(w, http.StatusOK, "Successfully authenticated the user", []interface{}{user})
