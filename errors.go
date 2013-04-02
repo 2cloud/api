@@ -104,7 +104,7 @@ func BadRequestFormatOnItem(field string, item int) *Error {
 	return err
 }
 
-func AlreadyInUse(field string, item int) *Error {
+func AlreadyInUse(field string) *Error {
 	return AlreadyInUseOnItem(field, -1)
 }
 
