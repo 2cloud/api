@@ -230,6 +230,10 @@ func updateDevice(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	}
 	err = b.Persister.UpdateDevice(&device, request.Device.Name, request.Device.ClientType, gcm_key)
 	if err != nil {
+		if err == twocloud.InvalidClientType {
+			Respond(w, http.StatusBadRequest, "Invalid client_type.", []interface{}{InvalidValue("device.client_type")})
+			return
+		}
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return
 	}
