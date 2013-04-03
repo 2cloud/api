@@ -219,6 +219,19 @@ func sendNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) 
 	}
 	username := r.URL.Query().Get(":username")
 	if username != "" {
+		user, err := b.getUser(username)
+		if err != nil {
+			if err == UnauthorisedAccessAttempt {
+				Respond(w, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{AccessDenied("")})
+				return
+			}
+			if err == twocloud.UserNotFoundError {
+				Respond(w, http.StatusNotFound, "User not found.", []interface{}{NotFound("user")})
+				return
+			}
+			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
+			return
+		}
 		deviceIDstr := r.URL.Query().Get(":device")
 		if deviceIDstr != "" {
 			deviceID, err := strconv.ParseUint(deviceIDstr, 10, 64)
@@ -240,6 +253,10 @@ func sendNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) 
 				Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 				return
 			}
+			if device.UserID != user.ID {
+				Respond(w, http.StatusBadRequest, "Specified device does not belong to specified user.", []interface{}{WrongOwner("device")})
+				return
+			}
 			notifications, err := b.Persister.SendNotificationsToDevice(device, notifications)
 			if err != nil {
 				b.Persister.Log.Error(err.Error())
@@ -249,20 +266,6 @@ func sendNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) 
 			Respond(w, http.StatusCreated, "Successfully created notifications", []interface{}{notifications})
 			return
 		}
-		user, err := b.getUser(username)
-		if err != nil {
-			if err == UnauthorisedAccessAttempt {
-				Respond(w, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{AccessDenied("")})
-				return
-			}
-			if err == twocloud.UserNotFoundError {
-				Respond(w, http.StatusNotFound, "User not found.", []interface{}{NotFound("user")})
-				return
-			}
-			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
-			return
-		}
-
 		notifications, err := b.Persister.SendNotificationsToUser(user, notifications)
 		if err != nil {
 			b.Persister.Log.Error(err.Error())
