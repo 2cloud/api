@@ -149,7 +149,7 @@ func getNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	notification, err := b.Persister.GetNotification(twocloud.ID(notificationID))
 	if err != nil {
 		if err == twocloud.NotificationNotFoundError {
-			Respond(w, http.StatusInternalServerError, err.Error(), []interface{}{NotFound("id")})
+			Respond(w, http.StatusNotFound, err.Error(), []interface{}{NotFound("id")})
 			return
 		}
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
