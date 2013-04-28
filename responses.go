@@ -10,16 +10,17 @@ import (
 )
 
 type Response struct {
-	Code          int                     `json:"code"`
-	Message       string                  `json:"message"`
-	Accounts      []twocloud.Account      `json:"accounts,omitempty"`
-	Devices       []twocloud.Device       `json:"devices,omitempty"`
-	Links         []twocloud.Link         `json:"links,omitempty"`
-	Notifications []twocloud.Notification `json:"notifications,omitempty"`
-	Subscriptions []twocloud.Subscription `json:"subscriptions,omitempty"`
-	Users         []twocloud.User         `json:"users,omitempty"`
-	Credentials   *Credentials            `json:"credentials,omitempty"`
-	Errors        []Error                 `json:"errors,omitempty"`
+	Code           int                      `json:"code"`
+	Message        string                   `json:"message"`
+	Accounts       []twocloud.Account       `json:"accounts,omitempty"`
+	Devices        []twocloud.Device        `json:"devices,omitempty"`
+	Links          []twocloud.Link          `json:"links,omitempty"`
+	Notifications  []twocloud.Notification  `json:"notifications,omitempty"`
+	Subscriptions  []twocloud.Subscription  `json:"subscriptions,omitempty"`
+	Users          []twocloud.User          `json:"users,omitempty"`
+	FundingSources *twocloud.FundingSources `json:"funding_sources,omitempty"`
+	Credentials    *Credentials             `json:"credentials,omitempty"`
+	Errors         []Error                  `json:"errors,omitempty"`
 }
 
 func Respond(w http.ResponseWriter, code int, msg string, elems []interface{}) {
@@ -141,6 +142,12 @@ func Respond(w http.ResponseWriter, code int, msg string, elems []interface{}) {
 		case *Credentials:
 			contentTypes["credentials"] = true
 			resp.Credentials = d
+		case *twocloud.FundingSources:
+			contentTypes["funding_sources"] = true
+			resp.FundingSources = d
+		case twocloud.FundingSources:
+			contentTypes["funding_sources"] = true
+			resp.FundingSources = &d
 		case Error:
 			contentTypes["errors"] = true
 			resp.Errors = append(resp.Errors, d)

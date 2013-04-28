@@ -259,6 +259,13 @@ func main() {
 	router.Put("/users/:username/subscription", newRequest(updateSubscription, true))
 	router.Del("/users/:username/subscription", newRequest(cancelSubscription, true))
 
+	// Funding Sources
+	router.Get("/users/:username/funding_sources", newRequest(getFundingSources, true))
+	router.Get("/users/:username/funding_sources/:provider/:id", newRequest(getFundingSource, true))
+	router.Post("/users/:username/funding_sources", newRequest(addFundingSource, true))
+	router.Put("/users/:username/funding_sources/:provider/:id", newRequest(updateFundingSource, true))
+	router.Del("/users/:username/funding_sources/:provider/:id", newRequest(deleteFundingSource, true))
+
 	os.Stdout.WriteString("Listening on port " + port + "\n")
 	err = http.ListenAndServe(":"+port, router)
 	if err != nil {
