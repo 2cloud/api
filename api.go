@@ -266,6 +266,13 @@ func main() {
 	router.Put("/users/:username/funding_sources/:provider/:id", newRequest(updateFundingSource, true))
 	router.Del("/users/:username/funding_sources/:provider/:id", newRequest(deleteFundingSource, true))
 
+	// Campaigns
+	router.Get("/campaigns", devicelessRequest(getCampaigns, false))
+	router.Get("/campaigns/:id", devicelessRequest(getCampaign, false))
+	router.Post("/campaigns", newRequest(newCampaign, true))
+	router.Put("/campaigns/:id", newRequest(updateCampaign, true))
+	router.Del("/campaigns/:id", newRequest(deleteCampaign, true))
+
 	os.Stdout.WriteString("Listening on port " + port + "\n")
 	err = http.ListenAndServe(":"+port, router)
 	if err != nil {

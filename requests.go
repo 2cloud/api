@@ -20,6 +20,7 @@ type RequestData struct {
 	User              *user                    `json:"user,omitempty"`
 	EmailVerification *emailVerification       `json:"email_verification,omitempty"`
 	FundingSources    *twocloud.FundingSources `json:"funding_sources,omitempty"`
+	Campaign          *campaign                `json:"campaign,omitempty"`
 }
 
 func getRequest(r *http.Request) (RequestData, error) {
