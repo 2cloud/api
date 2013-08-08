@@ -18,9 +18,12 @@ import (
 var config twocloud.Config
 var VERSION = "1.0.0"
 
-func AuthenticateRequest(w http.ResponseWriter, r *http.Request, deviceRequired bool, bundle *RequestBundle) bool {
+func AuthenticateRequest(w http.ResponseWriter, r *http.Request, authRequired, deviceRequired bool, bundle *RequestBundle) bool {
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
+		if !authRequired {
+			return true
+		}
 		Respond(w, http.StatusUnauthorized, "No credentials supplied.", []interface{}{MissingParam("headers.authorization")})
 		return false
 	}
@@ -165,7 +168,7 @@ func (rb *Request) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bundle := newBundle(p)
-	if !rb.AuthRequired || AuthenticateRequest(w, r, rb.DeviceRequired, bundle) {
+	if AuthenticateRequest(w, r, rb.AuthRequired, rb.DeviceRequired, bundle) {
 		rb.Handler(w, r, bundle)
 	}
 }
@@ -272,6 +275,17 @@ func main() {
 	router.Post("/campaigns", newRequest(newCampaign, true))
 	router.Put("/campaigns/:id", newRequest(updateCampaign, true))
 	router.Del("/campaigns/:id", newRequest(deleteCampaign, true))
+
+	// Payments
+	router.Get("/payments", devicelessRequest(getPayments, false))
+	router.Get("/campaigns/:campaign/payments", devicelessRequest(getPayments, false))
+	router.Get("/users/:username/payments", devicelessRequest(getPayments, false))
+	router.Get("/funding_sources/:funding_source/payments", devicelessRequest(getPayments, false))
+	router.Get("/payments/:id", devicelessRequest(getPayment, false))
+	router.Post("/payments", newRequest(newPayment, true))
+	router.Put("/payments/:id/status", newRequest(chargePayment, true))
+	router.Put("/payments/:id", newRequest(updatePayment, true))
+	router.Del("/payments/:id", newRequest(deletePayment, true))
 
 	os.Stdout.WriteString("Listening on port " + port + "\n")
 	err = http.ListenAndServe(":"+port, router)

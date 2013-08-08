@@ -74,6 +74,7 @@ func getFundingSource(w http.ResponseWriter, r *http.Request, b *RequestBundle) 
 	fsType = strings.ToLower(fsType)
 	if !twocloud.IsValidProvider(fsType) {
 		Respond(w, http.StatusBadRequest, "Not a valid funding source provider.", []interface{}{InvalidValue("provider")})
+		return
 	}
 	fs := twocloud.FundingSources{}
 	switch fsType {
