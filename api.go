@@ -283,7 +283,7 @@ func main() {
 	router.Get("/funding_sources/:funding_source/payments", devicelessRequest(getPayments, false))
 	router.Get("/payments/:id", devicelessRequest(getPayment, false))
 	router.Post("/payments", newRequest(newPayment, true))
-	router.Put("/payments/:id/status", newRequest(chargePayment, true))
+	router.Put("/payments/:id/status", newRequest(updatePaymentStatus, true))
 	router.Put("/payments/:id", newRequest(updatePayment, true))
 	router.Del("/payments/:id", newRequest(deletePayment, true))
 
