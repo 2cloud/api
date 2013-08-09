@@ -152,7 +152,8 @@ func createUser(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 	if request.User.ReceiveNewsletter != nil {
 		newsletter = *request.User.ReceiveNewsletter
 	}
-	user, err := b.Persister.Register(*request.User.Username, *request.User.Email, given_name, family_name, true, false, newsletter)
+	email_unconfirmed := (*request.User.Email != account.Email) || !account.EmailVerified
+	user, err := b.Persister.Register(*request.User.Username, *request.User.Email, given_name, family_name, email_unconfirmed, false, newsletter)
 	if err != nil {
 		if err == twocloud.MissingEmailError {
 			Respond(w, http.StatusBadRequest, "Email must be specified.", []interface{}{MissingParam("user.email")})
