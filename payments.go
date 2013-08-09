@@ -116,9 +116,9 @@ func getPayments(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return
 	}
-	if !b.AuthUser.IsAdmin {
+	if b.AuthUser == nil || !b.AuthUser.IsAdmin {
 		for index, _ := range payments {
-			if payments[index].UserID != b.AuthUser.ID {
+			if b.AuthUser == nil || payments[index].UserID != b.AuthUser.ID {
 				if payments[index].Anonymous {
 					payments[index].UserID = twocloud.ID(0)
 				}
@@ -153,7 +153,7 @@ func getPayment(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return
 	}
-	if !b.AuthUser.IsAdmin && b.AuthUser.ID != payment.UserID {
+	if b.AuthUser == nil || (!b.AuthUser.IsAdmin && b.AuthUser.ID != payment.UserID) {
 		if payment.Status != twocloud.PAYMENT_STATUS_PENDING && payment.Status != twocloud.PAYMENT_STATUS_SUCCESS {
 			Respond(w, http.StatusNotFound, "No such payment", []interface{}{NotFound("id")})
 			return

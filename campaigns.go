@@ -63,7 +63,11 @@ func getCampaigns(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		aux = &isAux
 	}
 	var campaigns []twocloud.Campaign
-	campaigns, err = b.Persister.GetCampaigns(current, aux, twocloud.ID(before), twocloud.ID(after), count, b.AuthUser.IsAdmin)
+	admin := false
+	if b.AuthUser != nil {
+		admin = b.AuthUser.IsAdmin
+	}
+	campaigns, err = b.Persister.GetCampaigns(current, aux, twocloud.ID(before), twocloud.ID(after), count, admin)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
@@ -86,7 +90,11 @@ func getCampaign(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "Invalid ID format.", []interface{}{InvalidFormat("id")})
 		return
 	}
-	campaign, err := b.Persister.GetCampaign(twocloud.ID(id), b.AuthUser.IsAdmin)
+	admin := false
+	if b.AuthUser != nil {
+		admin = b.AuthUser.IsAdmin
+	}
+	campaign, err := b.Persister.GetCampaign(twocloud.ID(id), admin)
 	if err != nil {
 		if err == twocloud.CampaignNotFoundError {
 			Respond(w, http.StatusNotFound, "Campaign not found.", []interface{}{NotFound("id")})
