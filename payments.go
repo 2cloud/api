@@ -104,8 +104,11 @@ func getPayments(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		}
 		if newcount > 0 && newcount <= 100 {
 			count = newcount
-		} else {
+		} else if newcount < 0 {
 			Respond(w, http.StatusBadRequest, "Invalid count.", []interface{}{InvalidValue("count")})
+			return
+		} else {
+			Respond(w, http.StatusBadRequest, "Invalid count.", []interface{}{TooLong("count")})
 			return
 		}
 	}
@@ -231,6 +234,9 @@ func newPayment(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 			Respond(w, http.StatusBadRequest, "Funding source does not belong to specified user.", []interface{}{WrongOwner("payment.funding_source_id")})
 			return
 		}
+	default:
+		Respond(w, http.StatusBadRequest, "Not a valid funding source provider.", []interface{}{InvalidValue("payment.funding_source_provider")})
+		return
 	}
 	payment, err := b.Persister.AddPayment(*request.Payment.Amount, *request.Payment.Message, *request.Payment.UserID, *request.Payment.FundingSourceID, *request.Payment.Campaign, *request.Payment.Anonymous)
 	if err != nil {
@@ -268,6 +274,28 @@ func updatePayment(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusUnauthorized, "You cannot update payments for that user.", []interface{}{AccessDenied("payment.user_id")})
 		return
 	}
+	// Need to retrieve payment now, to compare ownership of the funding source
+	idstr := r.URL.Query().Get(":id")
+	if idstr == "" {
+		Respond(w, http.StatusBadRequest, "ID missing", []interface{}{MissingParam("id")})
+		return
+	}
+	id, err := strconv.ParseUint(idstr, 10, 64)
+	if err != nil {
+		Respond(w, http.StatusBadRequest, "Invalid ID", []interface{}{InvalidFormat("id")})
+		return
+	}
+	var payment twocloud.Payment
+	payment, err = b.Persister.GetPayment(twocloud.ID(id))
+	if err != nil {
+		if err == twocloud.PaymentNotFoundError {
+			Respond(w, http.StatusNotFound, "No such payment", []interface{}{NotFound("id")})
+			return
+		}
+		b.Persister.Log.Error(err.Error())
+		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
+		return
+	}
 	if request.Payment.FundingSourceID != nil {
 		if request.Payment.FundingSourceType == nil {
 			Respond(w, http.StatusBadRequest, "You must specify the funding source provider if you specify a funding source ID.", []interface{}{MissingParam("payment.funding_source_provider")})
@@ -289,32 +317,26 @@ func updatePayment(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 				Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 				return
 			}
-			if source.UserID != *request.Payment.UserID {
-				Respond(w, http.StatusBadRequest, "Funding source does not belong to specified user.", []interface{}{WrongOwner("payment.funding_source_id")})
-				return
+			if request.Payment.UserID != nil {
+				if source.UserID != *request.Payment.UserID {
+					Respond(w, http.StatusBadRequest, "Funding source does not belong to specified user.", []interface{}{WrongOwner("payment.funding_source_id")})
+					return
+				}
+			} else {
+				if source.UserID != payment.UserID {
+					Respond(w, http.StatusBadRequest, "Funding source and payment do not belong to the same user.", []interface{}{WrongOwner("payment.funding_source_id")})
+					return
+				}
 			}
-		}
-	}
-	idstr := r.URL.Query().Get(":id")
-	if idstr == "" {
-		Respond(w, http.StatusBadRequest, "ID missing", []interface{}{MissingParam("id")})
-		return
-	}
-	id, err := strconv.ParseUint(idstr, 10, 64)
-	if err != nil {
-		Respond(w, http.StatusBadRequest, "Invalid ID", []interface{}{InvalidFormat("id")})
-		return
-	}
-	var payment twocloud.Payment
-	payment, err = b.Persister.GetPayment(twocloud.ID(id))
-	if err != nil {
-		if err == twocloud.PaymentNotFoundError {
-			Respond(w, http.StatusNotFound, "No such payment", []interface{}{NotFound("id")})
+		default:
+			Respond(w, http.StatusBadRequest, "Not a valid funding source provider.", []interface{}{InvalidValue("payment.funding_source_provider")})
 			return
 		}
-		b.Persister.Log.Error(err.Error())
-		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
-		return
+	} else {
+		if request.Payment.FundingSourceType != nil {
+			Respond(w, http.StatusBadRequest, "You must specify the funding source ID if you specify a funding source provider.", []interface{}{MissingParam("payment.funding_source_id")})
+			return
+		}
 	}
 	if !b.AuthUser.IsAdmin && payment.UserID != b.AuthUser.ID {
 		Respond(w, http.StatusUnauthorized, "You don't have access to that user's payments.", []interface{}{AccessDenied("payment.user_id")})
