@@ -49,8 +49,11 @@ func getCampaigns(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		}
 		if newcount > 0 && newcount <= 100 {
 			count = newcount
+		} else if newcount <= 0 {
+			Respond(w, http.StatusBadRequest, "Invalid count.", []interface{}{TooShort("count")})
+			return
 		} else {
-			Respond(w, http.StatusBadRequest, "Invalid count.", []interface{}{InvalidValue("count")})
+			Respond(w, http.StatusBadRequest, "Invalid count.", []interface{}{TooLong("count")})
 			return
 		}
 	}
