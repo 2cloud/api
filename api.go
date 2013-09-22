@@ -255,12 +255,12 @@ func main() {
 	router.Del("/users/:username/notifications/:notification", newRequest(deleteNotification, true))
 
 	// Subscriptions
-	router.Get("/subscriptions/in_grace_period", newRequest(getGraceSubscriptions, true))
-	router.Get("/users/:username/subscription", newRequest(getUserSubscription, true))
-
-	router.Post("/users/:username/subscription", devicelessRequest(startSubscription, true))
-	router.Put("/users/:username/subscription", newRequest(updateSubscription, true))
-	router.Del("/users/:username/subscription", newRequest(cancelSubscription, true))
+	router.Get("/subscriptions", newRequest(getSubscriptions, true))
+	router.Get("/users/:username/subscriptions", newRequest(getSubscriptions, true))
+	router.Get("/subscriptions/:id", newRequest(getSubscription, true))
+	router.Post("/subscriptions", newRequest(createSubscription, true))
+	router.Put("/subscriptions/:id", newRequest(updateSubscription, true))
+	router.Del("/subscriptions/:id", newRequest(cancelSubscription, true))
 
 	// Funding Sources
 	router.Get("/users/:username/funding_sources", newRequest(getFundingSources, true))
