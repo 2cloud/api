@@ -325,6 +325,10 @@ func cancelSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle
 	var id twocloud.ID
 	var subscription *twocloud.Subscription
 	idStr := r.URL.Query().Get(":id")
+	if idStr == "" {
+		Respond(w, http.StatusBadRequest, "Missing ID.", []interface{}{MissingParam("id")})
+		return
+	}
 	id, err = twocloud.IDFromString(idStr)
 	if err != nil {
 		Respond(w, http.StatusBadRequest, "Invalid ID format.", []interface{}{InvalidFormat("id")})
