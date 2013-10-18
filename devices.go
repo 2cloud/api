@@ -288,7 +288,7 @@ func deleteDevice(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusBadRequest, "That device ID does not belong to that user.", []interface{}{WrongOwner("id")})
 		return
 	}
-	err = b.Persister.DeleteDevice(device)
+	err = b.Persister.DeleteDevice(device, true)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
