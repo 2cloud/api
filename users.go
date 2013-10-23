@@ -297,7 +297,7 @@ func deleteUser(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
-	err = b.Persister.DeleteUser(user)
+	err = b.Persister.DeleteUser(user, true)
 	if err != nil {
 		b.Persister.Log.Error(err.Error())
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
