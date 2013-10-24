@@ -155,11 +155,6 @@ func (b *RequestBundle) getDevice(id twocloud.ID) (twocloud.Device, error) {
 }
 
 func (rb *Request) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if config.MaintenanceMode {
-		w.Header().Set("Retry-After", "300")
-		Respond(w, http.StatusServiceUnavailable, "Undergoing maintenance. Please try again after 5 minutes.", []interface{}{})
-		return
-	}
 	p, err := twocloud.NewPersister(config)
 	defer p.Close()
 	if err != nil {
