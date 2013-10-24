@@ -155,11 +155,11 @@ func getNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
-	if notification.DestinationType == "user" && notification.Destination != user.ID {
+	if notification.UserID != user.ID {
 		Respond(w, http.StatusBadRequest, "That notification doesn't belong to that user.", []interface{}{WrongOwner("id")})
 		return
-	} else if notification.DestinationType == "device" {
-		device, err := b.getDevice(notification.Destination)
+	} else if notification.DeviceID != nil {
+		device, err := b.getDevice(*notification.DeviceID)
 		if err != nil {
 			if err == UnauthorisedAccessAttempt {
 				Respond(w, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{AccessDenied("")})
@@ -172,7 +172,7 @@ func getNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle) {
 			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 			return
 		}
-		if device.UserID != user.ID {
+		if device.UserID != notification.UserID {
 			Respond(w, http.StatusBadRequest, "That notification does not belong to that user.", []interface{}{WrongOwner("device")})
 			return
 		}
@@ -331,11 +331,11 @@ func markNotificationRead(w http.ResponseWriter, r *http.Request, b *RequestBund
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
-	if notification.DestinationType == "user" && notification.Destination != user.ID {
+	if notification.UserID != user.ID {
 		Respond(w, http.StatusBadRequest, "That notification doesn't belong to that user.", []interface{}{WrongOwner("id")})
 		return
-	} else if notification.DestinationType == "device" {
-		device, err := b.getDevice(notification.Destination)
+	} else if notification.DeviceID != nil {
+		device, err := b.getDevice(*notification.DeviceID)
 		if err != nil {
 			if err == UnauthorisedAccessAttempt {
 				Respond(w, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{AccessDenied("")})
@@ -348,8 +348,8 @@ func markNotificationRead(w http.ResponseWriter, r *http.Request, b *RequestBund
 			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 			return
 		}
-		if device.UserID != user.ID {
-			Respond(w, http.StatusBadRequest, "That notification does not belong to that user.", []interface{}{WrongOwner("id")})
+		if device.UserID != notification.UserID {
+			Respond(w, http.StatusBadRequest, "That device does not belong to that user.", []interface{}{WrongOwner("device")})
 			return
 		}
 	}
@@ -421,11 +421,11 @@ func deleteNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
 	}
-	if notification.DestinationType == "user" && notification.Destination != user.ID {
+	if notification.UserID != user.ID {
 		Respond(w, http.StatusBadRequest, "That notification doesn't belong to that user.", []interface{}{WrongOwner("id")})
 		return
-	} else if notification.DestinationType == "device" {
-		device, err := b.getDevice(notification.Destination)
+	} else if notification.DeviceID != nil {
+		device, err := b.getDevice(*notification.DeviceID)
 		if err != nil {
 			if err == UnauthorisedAccessAttempt {
 				Respond(w, http.StatusUnauthorized, "You don't have access to that user's notifications.", []interface{}{AccessDenied("")})
@@ -438,8 +438,8 @@ func deleteNotification(w http.ResponseWriter, r *http.Request, b *RequestBundle
 			Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 			return
 		}
-		if device.UserID != user.ID {
-			Respond(w, http.StatusBadRequest, "That notification does not belong to that user.", []interface{}{WrongOwner("id")})
+		if device.UserID != notification.UserID {
+			Respond(w, http.StatusBadRequest, "That device does not belong to that user.", []interface{}{WrongOwner("device")})
 			return
 		}
 	}
