@@ -347,7 +347,7 @@ func cancelSubscription(w http.ResponseWriter, r *http.Request, b *RequestBundle
 		Respond(w, http.StatusUnauthorized, "You don't have access to that subscription.", []interface{}{AccessDenied("")})
 		return
 	}
-	err = b.Persister.CancelSubscription(id)
+	err = b.Persister.CancelSubscription(*subscription)
 	if err != nil {
 		Respond(w, http.StatusInternalServerError, "Internal server error", []interface{}{ActOfGod("")})
 		return
