@@ -162,6 +162,7 @@ func (rb *Request) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return
 	}
+	defer p.Time(time.Now(), "api.http.request")
 	bundle := newBundle(p)
 	if AuthenticateRequest(w, r, rb.AuthRequired, rb.DeviceRequired, bundle) {
 		rb.Handler(w, r, bundle)
