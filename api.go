@@ -19,6 +19,7 @@ var config twocloud.Config
 var VERSION = "1.0.0"
 
 func AuthenticateRequest(w http.ResponseWriter, r *http.Request, authRequired, deviceRequired bool, bundle *RequestBundle) bool {
+	defer bundle.Persister.Time(time.Now(), "api.http.request.authenticated")
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
 		if !authRequired {
@@ -121,6 +122,7 @@ func newBundle(p *twocloud.Persister) *RequestBundle {
 var UnauthorisedAccessAttempt = errors.New("Unauthorised access attempt.")
 
 func (b *RequestBundle) getUser(username string) (twocloud.User, error) {
+	defer b.Persister.Time(time.Now(), "api.user.retrieved_from_persister")
 	user := *b.AuthUser
 	var err error
 	if strings.ToLower(username) != strings.ToLower(user.Username) {
@@ -138,6 +140,7 @@ func (b *RequestBundle) getUser(username string) (twocloud.User, error) {
 }
 
 func (b *RequestBundle) getDevice(id twocloud.ID) (twocloud.Device, error) {
+	defer b.Persister.Time(time.Now(), "api.device.retrieved_from_persister")
 	device := *b.AuthDevice
 	var err error
 	if device.ID != id {
@@ -162,7 +165,7 @@ func (rb *Request) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Respond(w, http.StatusInternalServerError, "Internal server error.", []interface{}{ActOfGod("")})
 		return
 	}
-	defer p.Time(time.Now(), "api.http.request")
+	defer p.Time(time.Now(), "api.http.request.served")
 	bundle := newBundle(p)
 	if AuthenticateRequest(w, r, rb.AuthRequired, rb.DeviceRequired, bundle) {
 		rb.Handler(w, r, bundle)
